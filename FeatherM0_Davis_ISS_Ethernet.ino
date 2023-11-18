@@ -117,9 +117,6 @@ static void xinterruptHandlertask(void *pvParameters);
 static void xReadRadioTask(void *pvParameters);
 TaskHandle_t xReadRadioTaskHandle;
 TaskHandle_t xinterrupttaskhandle;
-TaskHandle_t xDecodePackTaskHandle;
-static void xDecodePackTask(void *pvParameters);
-
 
 void setup() {
   Serial.begin(115200);
@@ -145,11 +142,10 @@ void setup() {
 //  noInterrupts();
 // interrupts();
  
- /*
 
   pinMode(8, INPUT_PULLUP); // RF69 Enable pin
  // pinMode(10, INPUT_PULLUP); // Ethernet Feather CS pin
-
+/*
 //  xSemaphoreTake(SPIBusSemaphore,1))
     // Initialize Ethernet 
   Ethernet.init(10);
@@ -168,21 +164,14 @@ void setup() {
   timeClient.begin(); // Start NTP Client 
 
  // pinMode(10, INPUT_PULLUP); // Ethernet Feather CS pin
-
 */
 
     radio.setStations(stations, 1);
    radio.initialize(FREQ_BAND_US);
    radio.setBandwidth(RF69_DAVIS_BW_WIDE);
 
-
- // digitalWrite(8, HIGH);
- // pinMode(8, OUTPUT); // RF69 Enable pin
-
-  //noInterrupts();
   xTaskCreate(xReadRadioTask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 1,&xReadRadioTaskHandle);
   radio.xReadRadioTaskHandle=xReadRadioTaskHandle;
-  //xTaskCreate(xDecodePackTask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 1,&xDecodePackTaskHandle);
   //xTaskCreate(xNTPClientTask,     "NTP Task",       1024, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle); // Start NTP Update task
   xTaskCreate(xinterruptHandlertask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 3,&xinterrupttaskhandle);
   //interrupts();
@@ -461,18 +450,6 @@ if(xSemaphoreTake(SPIBusSemaphore,100)){// we need eth0 semaphore to update time
   taskYIELD();
   //vTaskDelay(1/portTICK_PERIOD_MS );
 }}
-
-/*
-static void xDecodePackTask(void *pvParameters){
-while(true){  
-  if (radio.fifo.hasElements()) {
-    decode_packet(radio.fifo.dequeue());
-  } else { 
-    //Serial.println("Decode Packet Task Completed");
-    vTaskSuspend(NULL);}
-}
-}
-*/
 
 // NTP Task polls NTP and updates the RTC
 static void xNTPClientTask(void *pvParameters){

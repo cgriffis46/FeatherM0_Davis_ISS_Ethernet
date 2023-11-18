@@ -21,7 +21,7 @@
 #include "PacketFifo.h"
 
 #ifndef DAVISRFM69_DEBUG
-// #define DAVISRFM69_DEBUG
+ //#define DAVISRFM69_DEBUG
 #endif
 
 #include <SPI.h>
@@ -344,6 +344,7 @@ void DavisRFM69::loop() {
 #endif
         stations[i].syncBegan = xTaskGetTickCount(  );
         stations[i].progress = 0;
+        //setChannel(stations[i].channel);
         setChannel(stations[i].channel);
       } else if (difftime(xTaskGetTickCount(  ), stations[i].syncBegan) > DISCOVERY_STEP/portTICK_PERIOD_US) {
         // we tried and failed to sync, try the next channel
