@@ -145,7 +145,7 @@ void setup() {
 
   pinMode(8, INPUT_PULLUP); // RF69 Enable pin
  // pinMode(10, INPUT_PULLUP); // Ethernet Feather CS pin
-/*
+
 //  xSemaphoreTake(SPIBusSemaphore,1))
     // Initialize Ethernet 
   Ethernet.init(10);
@@ -164,7 +164,7 @@ void setup() {
   timeClient.begin(); // Start NTP Client 
 
  // pinMode(10, INPUT_PULLUP); // Ethernet Feather CS pin
-*/
+
 
     radio.setStations(stations, 1);
    radio.initialize(FREQ_BAND_US);
@@ -172,7 +172,7 @@ void setup() {
 
   xTaskCreate(xReadRadioTask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 1,&xReadRadioTaskHandle);
   radio.xReadRadioTaskHandle=xReadRadioTaskHandle;
-  //xTaskCreate(xNTPClientTask,     "NTP Task",       1024, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle); // Start NTP Update task
+  xTaskCreate(xNTPClientTask,     "NTP Task",       1024, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle); // Start NTP Update task
   xTaskCreate(xinterruptHandlertask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 3,&xinterrupttaskhandle);
   //interrupts();
   Serial.println("Boot complete!");
@@ -493,7 +493,7 @@ if(shouldUpdateRTC){
 } else {}
 #endif
     //taskYIELD();
-    vTaskDelay( 1000/portTICK_PERIOD_MS );
+    vTaskDelay( 2500/portTICK_PERIOD_MS );
 }}// end of thread
 
 void RSSIThresholdInterrupt(){
@@ -551,6 +551,7 @@ while(true){
 //          vTaskSuspendAll();
 //    taskENTER_CRITICAL( );
 //    radio.RSSI = radio.readRSSI();  // Read up front when it is most likely the carrier is still up
+ // Serial.print();Serial.println();
     if (radio._mode == RF69_MODE_RX && (radio.readReg(REG_IRQFLAGS2) & RF_IRQFLAGS2_PAYLOADREADY)) {
       radio.FEI = word(radio.readReg(REG_FEIMSB), radio.readReg(REG_FEILSB));
       radio.setMode(RF69_MODE_STANDBY);
