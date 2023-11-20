@@ -103,8 +103,9 @@ byte mac[] = {
 DateTime now; // Current DateTime
 DateTime ntptime; // NTP Time
 //WiFiUDP wifiUdp;
+IPAddress ntpip(192, 168, 1, 20);
 EthernetUDP eth0udp; // UDP Socket for NTP Client
-NTPClient timeClient(eth0udp); // NTP Client 
+NTPClient timeClient(eth0udp,ntpip); // NTP Client 
 static void xNTPClientTask(void *pvParameters); // NTP Client Task
 TaskHandle_t xNTPClientTaskHandle;  // NTP Client Task Handle
 
@@ -129,25 +130,11 @@ void setup() {
   I2CBusSemaphore = xSemaphoreCreateMutex(); // Create I2C Semaphore
   //Eth0Semaphore = xSemaphoreCreateMutex(); // Create ETH0 Semaphore
   SPIBusSemaphore = xSemaphoreCreateMutex();
-//  SPIBusSemaphore = xSemaphoreCreateBinary(); // Create SPI Semaphore
-
-  //pinMode(10, OUTPUT);
-  //digitalWrite(10,LOW);
- // pinMode(RFM69_RST, OUTPUT);
- // pinMode(RFM69_CS, OUTPUT);
- // digitalWrite(RFM69_CS,HIGH);
- // digitalWrite(RFM69_RST,LOW);
-
- // digitalWrite(RFM69_RST,HIGH);
-//  noInterrupts();
-// interrupts();
- 
+//  SPIBusSemaphore = xSemaphoreCreateBinary(); // Create SPI Semaphore 
 
   pinMode(8, INPUT_PULLUP); // RF69 Enable pin
  // pinMode(10, INPUT_PULLUP); // Ethernet Feather CS pin
-
-//  xSemaphoreTake(SPIBusSemaphore,1))
-    // Initialize Ethernet 
+  // Initialize Ethernet 
   Ethernet.init(10);
   // start the Ethernet connection and the server:
   Ethernet.begin(mac);
@@ -174,7 +161,6 @@ void setup() {
   radio.xReadRadioTaskHandle=xReadRadioTaskHandle;
   xTaskCreate(xNTPClientTask,     "NTP Task",       1024, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle); // Start NTP Update task
   xTaskCreate(xinterruptHandlertask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 3,&xinterrupttaskhandle);
-  //interrupts();
   Serial.println("Boot complete!");
 
   vTaskStartScheduler(); // Start task scheduler
@@ -417,6 +403,7 @@ void ModeReadyInterrupt(){
 }
 
 static void xReadRadioTask(void *pvParameters){
+  long startTime,endTime;
 //vTaskSuspend(NULL);
 pinMode(5,INPUT_PULLUP);
 attachInterrupt(5, RSSIThresholdInterrupt, RISING);
@@ -426,7 +413,8 @@ attachInterrupt(6,ModeReadyInterrupt,CHANGE);
 
 while(true){
 //   vTaskSuspend(NULL);
-if(xSemaphoreTake(SPIBusSemaphore,100)){// we need eth0 semaphore to update time over NTP
+if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time over NTP
+//Serial.println("xRadio Task has Mutex");
     if (radio.mode == SM_RECEIVING) {
     digitalWrite(LED, HIGH);
   } else if (radio.mode == SM_SEARCHING){
@@ -445,23 +433,27 @@ if(xSemaphoreTake(SPIBusSemaphore,100)){// we need eth0 semaphore to update time
       decode_packet(radio.fifo.dequeue());
     } else { }
 
+//  Serial.println("Radio Task gives up mutex");
   xSemaphoreGive( SPIBusSemaphore );
-}
+} 
   taskYIELD();
-  //vTaskDelay(1/portTICK_PERIOD_MS );
 }}
 
 // NTP Task polls NTP and updates the RTC
 static void xNTPClientTask(void *pvParameters){
+long taskStart, taskEnd;
+//timeClient.setUpdateInterval(60000);
 while(true){
+taskStart = millis();
 bool shouldUpdateRTC = false; // Only update RTC if NTP update is successfull 
 if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time over NTP
+//Serial.println("NTP Task has mutex");
 //      vTaskSuspendAll();
 //     taskENTER_CRITICAL( );
 //        noInterrupts();
 //        pinMode(10, OUTPUT); // Ethernet Feather CS pin
        // timeClient must be called every loop to update NTP time 
-      if(timeClient.update()) {// NTP client will update about once a minute. 
+      if(timeClient.forceUpdate()) {// NTP client will update about once a minute. 
           if(timeClient.isTimeSet()){ // sanity check 
             shouldUpdateRTC = true;// Update the RTC only when necessary
             //debug strings
@@ -469,17 +461,14 @@ if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time o
             now = DateTime(timeClient.getEpochTime());
             //String timedate = String(now.year())+String("-")+String(now.month())+String("-")+String(now.day())+String(" ")+String(now.hour())+String(":")+String(now.minute())+String(":")+String(now.second());
             Serial.println(now.timestamp());
+            Serial.flush();
             }
       }
       else {
       //          Serial.println("Could not update NTP time!");
       }
-//      pinMode(10, INPUT_PULLUP); // Ethernet Feather CS pin
-//      interrupts();
- //   digitalWrite(8, LOW);
-//      taskEXIT_CRITICAL( );
-//    xTaskResumeAll();
     xSemaphoreGive( SPIBusSemaphore );
+//    Serial.println("NTP task gives up mutex");
   } else{
     Serial.println("NTP task could not obtain mutex");
    }
@@ -492,8 +481,9 @@ if(shouldUpdateRTC){
   xSemaphoreGive( I2CBusSemaphore );}
 } else {}
 #endif
-    //taskYIELD();
-    vTaskDelay( 2500/portTICK_PERIOD_MS );
+taskEnd = millis()-taskStart;
+//Serial.print("NTP task: "); Serial.println(taskEnd);
+          vTaskDelay( 60000/portTICK_PERIOD_MS );
 }}// end of thread
 
 void RSSIThresholdInterrupt(){
@@ -507,34 +497,6 @@ void interruptHandler() {
   BaseType_t pxHigherPriorityTaskWoken;
 //    Serial.println("Interrupt");
 radio.PayloadReady = digitalRead(RFM69_INT);
-
-/*
-  if (xSemaphoreTakeFromISR(SPIBusSemaphore, &pxHigherPriorityTaskWoken)) {
-    radio.RSSI = radio.readRSSI();  // Read up front when it is most likely the carrier is still up
-    if (radio._mode == RF69_MODE_RX && (radio.readReg(REG_IRQFLAGS2) & RF_IRQFLAGS2_PAYLOADREADY)) {
-      radio.FEI = word(radio.readReg(REG_FEIMSB), radio.readReg(REG_FEILSB));
-      radio.setMode(RF69_MODE_STANDBY);
-      radio.select(true);  // Select RFM69 module, disabling interrupts
-      SPI.transfer(REG_FIFO & 0x7f);
-
-      for (byte i = 0; i < DAVIS_PACKET_LEN; i++) radio.DATA[i] = radio.reverseBits(SPI.transfer(0));
-
-      radio._packetReceived = true;
-
-      radio.handleRadioInt();
-
-      radio.unselect(true);  // Unselect RFM69 module, enabling interrupts
-    }
-    xSemaphoreGiveFromISR(SPIBusSemaphore, &pxHigherPriorityTaskWoken);
-    //xTaskResumeFromISR(xReadRadioTaskHandle);
-  } else {
-//    Serial.println("Interrupt could not obtain mutex");
-    xTaskResumeFromISR(xinterrupttaskhandle);
-    vTaskNotifyGiveFromISR(xinterrupttaskhandle,&pxHigherPriorityTaskWoken);
-    portYIELD_FROM_ISR( pxHigherPriorityTaskWoken );
-  }
-  */
-    Serial.flush();
    if(radio.PayloadReady){ 
       radio.PayloadReadyTicks = xTaskGetTickCount();
     xTaskResumeFromISR(xinterrupttaskhandle);}
@@ -544,14 +506,15 @@ radio.PayloadReady = digitalRead(RFM69_INT);
 static void xinterruptHandlertask(void *pvParameters){
 uint32_t ulNotifiedValue;
 byte i = 0;
-attachInterrupt(RFM69_INT, interruptHandler, CHANGE);
+attachInterrupt(RFM69_INT, interruptHandler, RISING);
 vTaskSuspend(NULL);
 while(true){
+
   if (xSemaphoreTake(SPIBusSemaphore,100)) {
+//      Serial.println("xInterruptTask took mutex");
 //          vTaskSuspendAll();
 //    taskENTER_CRITICAL( );
 //    radio.RSSI = radio.readRSSI();  // Read up front when it is most likely the carrier is still up
- // Serial.print();Serial.println();
     if (radio._mode == RF69_MODE_RX && (radio.readReg(REG_IRQFLAGS2) & RF_IRQFLAGS2_PAYLOADREADY)) {
       radio.FEI = word(radio.readReg(REG_FEIMSB), radio.readReg(REG_FEILSB));
       radio.setMode(RF69_MODE_STANDBY);
@@ -568,6 +531,7 @@ while(true){
     }
     
     xSemaphoreGive(SPIBusSemaphore);
+//    Serial.println("Interrupt task gives up mutex");
 //    xTaskResumeAll();
 //    taskEXIT_CRITICAL( );
  //   Serial.println("Radio Interrupt Task Completed");
@@ -575,11 +539,6 @@ while(true){
     vTaskSuspend(NULL);
     //xTaskResumeFromISR(xReadRadioTaskHandle);
   } else {
-
-    Serial.println("Interrupt Task could not obtain mutex");
-    Serial.flush();
-    //vTaskDelay( 1/portTICK_PERIOD_MS );
-    taskYIELD();
-    
+      taskYIELD();
   }}
 }
