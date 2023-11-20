@@ -448,10 +448,6 @@ taskStart = millis();
 bool shouldUpdateRTC = false; // Only update RTC if NTP update is successfull 
 if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time over NTP
 //Serial.println("NTP Task has mutex");
-//      vTaskSuspendAll();
-//     taskENTER_CRITICAL( );
-//        noInterrupts();
-//        pinMode(10, OUTPUT); // Ethernet Feather CS pin
        // timeClient must be called every loop to update NTP time 
       if(timeClient.forceUpdate()) {// NTP client will update about once a minute. 
           if(timeClient.isTimeSet()){ // sanity check 
@@ -483,7 +479,12 @@ if(shouldUpdateRTC){
 #endif
 taskEnd = millis()-taskStart;
 //Serial.print("NTP task: "); Serial.println(taskEnd);
-          vTaskDelay( 60000/portTICK_PERIOD_MS );
+if(shouldUpdateRTC){ // If the time was updated, sleep for 10 minutes
+    vTaskDelay( 600000/portTICK_PERIOD_MS );
+} else { // If the time could not be updated, sleep for just 2 minutes
+  vTaskDelay( 120000/portTICK_PERIOD_MS );
+}
+
 }}// end of thread
 
 void RSSIThresholdInterrupt(){
