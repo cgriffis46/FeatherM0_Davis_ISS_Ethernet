@@ -1,3 +1,5 @@
+#include <postParser.h>
+
 /*
   (c) 2023.10.26 by Cory Griffis
 
@@ -9,14 +11,28 @@
 
 */
 //#define _USE_RTC_PCF8523 true 
+
+
+#define USE_WUNDERGROUND_INFCE
+#define _USE_TH_SENSOR
 #define DAVISRFM69_DEBUG
+#define _INFCE_SEND_TEMP_HUMIDITY
+#ifdef _USE_TH_SENSOR
+//static void readTempHumiditySensor();
+//  Ticker readTHSensorTicker(readTempHumiditySensor,2,0);
+  float temperature, humidity;
+  float tempf, tempc;
+  bool QueueThermometerForInterfaces = true;
+  bool QueueHumidityForInterfaces = true;
+  bool UseCelcius = false;
+#endif
 
 #include <Ethernet.h>
 #include <Arduino.h>
 #include <EthernetUdp.h>
+#include <DNS.h>
 #include <SPI.h>
 //#include <EEPROM.h>
-
 // FreeRTOS Libraries 
 #include <FreeRTOS.h>
 #include <FreeRTOSConfig.h>
@@ -49,6 +65,90 @@
 #include "DavisRFM69.h"
 #include "PacketFifo.h"
 #include "RFM69registers.h"
+
+#include <Dns.h>
+
+// Wunderground interface 
+//#define USE_WUNDERGROUND_INFCE
+
+#ifdef USE_WUNDERGROUND_INFCE
+  #include "WundergroundInfce.h"
+
+  IPAddress wundergroundIP(0,0,0,0);
+  //HTTPClient httpWunderground;
+  bool WundergroundInfceEnable = true;
+  EthernetClient WundergroundEthernetCclient;
+
+  #define WundergroundStationIDLength 64
+#define WundergroundStationIDPassword 64
+#define wx_version String("00.01.00");
+
+#define SM_Wunderground_Infce_Init (byte)91
+#define SM_Wunderground_Infce_Get_IP_By_DNS (byte)99
+#define SM_Wunderground_Infce_Make_HTTP_Request (byte)101
+#define SM_Wunderground_Infce_WaitForHTTP_Response (byte)111
+#define SM_Wunderground_CloseConnections (byte)112
+#define SM_Wunderground_Infce_Idle (byte)255
+#define SM_Wunderground_Infce_No_Link (byte)254
+#define SM_Wunderground_Infce_Assemble_Payload (byte)121
+
+// Define sensor types accepted by Wunderground interface 
+enum {
+  WU_S_TEMPC_T = 1,
+  WU_S_TEMPC2_T = 2,
+  WU_S_TEMPC3_T = 3,
+  WU_S_TEMPC4_T = 4,
+  WU_S_INDOORTEMPC_T = 5,
+  WU_S_SOILTEMPC_T = 6,
+  WU_S_SOILTEMPC2_T = 7,
+  WU_S_SOILTEMPC3_T = 8,
+  WU_S_TEMPF_T = 9,
+  WU_S_TEMPF2_T = 10,
+  WU_S_TEMPF3_T = 11,
+  WU_S_TEMPF4_T = 12,
+  WU_S_INDOORTEMPF_T = 13,
+  WU_S_SOILTEMPF_T = 14,
+  WU_S_SOILTEMPF2_T = 15,
+  WU_S_SOILTEMPF3_T = 16,
+  WU_S_BAROMIN_T = 17,
+  WU_S_HUMIDITY_T = 18,
+  WU_S_INDOORHUMIDITY_T = 19
+
+} Wu_Sensor_t;
+
+enum {
+  WU_NOW_T = 1,
+  WU_RTC_T = 2,
+  WU_NTP_T = 3
+} Wu_Time_t;
+
+
+  String Wundergroundpayload;
+  String WundergroundHTTPString;
+  String WundergroundResponse;
+  String date_str;
+  int WundergroundResponseCode;
+  String WUurl = "https://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?";
+  String WUget = "/weatherstation/updateweatherstation.php?"; 
+  String WU_station_id = "KMAATTLE33"; //Wunderground station ID
+  String WU_station_pwd = "JWM4JYWE"; //# Wunderground station password
+  String WUcreds;  // = "ID=" + WU_station_id + "&PASSWORD="+ WU_station_pwd;
+  const char *url = "weatherstation.wunderground.com";
+  String action_str = "&action=updateraw";
+  String W_Software_Type = "&softwaretype=rp2040wx%20version"+wx_version;
+//  bool shouldUpdateWundergroundInfce = false;
+ // bool WundergroundInfceEnable = false;
+  char WundergroundStationID[WundergroundStationIDLength] = "KMAATTLE33";
+  char WundergroundStationPassword[WundergroundStationIDPassword] = "JWM4JYWE";
+  //struct repeating_timer WU_Update_timer;
+  uint8_t thermometer1Type = WU_S_TEMPF_T;
+  uint8_t humidity1_sensor_type = WU_S_HUMIDITY_T;
+  uint8_t WundergroundTimeSource = 1;
+
+
+static void xUpdateWundergroundInfce(void *pvParameters); // Must be called in main loop 
+
+#endif
 
 #define LED 13
 #define SERIAL_BAUD 19200
@@ -96,6 +196,16 @@ byte mac[] = {
 
 // default IP address
 //IPAddress ip(192, 168, 1, 177);
+// webserver definitions 
+
+static void xHTTPUpdateTask(void *pvParameters); // Webserver Task 
+EthernetClient HTTPClient; // The Web Client
+TaskHandle_t xHTTPClientTaskHandle; // Task Handle for Webserver Task
+// Initialize the Ethernet server library
+// with the IP address and port you want to use
+// (port 80 is default for HTTP):
+EthernetServer server(80);
+DNSClient dnsclient;
 
 // NTP Client definitions
 #include <NTPClient.h> // NTP Client Library 
@@ -118,7 +228,7 @@ static void xinterruptHandlertask(void *pvParameters);
 static void xReadRadioTask(void *pvParameters);
 TaskHandle_t xReadRadioTaskHandle;
 TaskHandle_t xinterrupttaskhandle;
-
+TaskHandle_t xUpdateWundergroundInfcetaskhandle;
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -138,6 +248,7 @@ void setup() {
   Ethernet.init(10);
   // start the Ethernet connection and the server:
   Ethernet.begin(mac);
+
   // Check for Ethernet hardware present
   if (Ethernet.hardwareStatus() == EthernetNoHardware) {
     Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
@@ -147,20 +258,28 @@ void setup() {
   }
   if (Ethernet.linkStatus() == LinkOFF) {
     Serial.println("Ethernet cable is not connected.");  }
+  dnsclient.begin(IPAddress(1,1,1,1));
 
   timeClient.begin(); // Start NTP Client 
 
+    server.begin(); // start webserver
+  Serial.print("server is at ");
+  Serial.println(Ethernet.localIP());
+  HTTPClient.setConnectionTimeout(2000);
+  xTaskCreate(xHTTPUpdateTask,     "HTTP Update Task",       256, NULL, tskIDLE_PRIORITY + 1, &xHTTPClientTaskHandle); // Start web server task
+
  // pinMode(10, INPUT_PULLUP); // Ethernet Feather CS pin
 
+  radio.setStations(stations, 1);
+  radio.initialize(FREQ_BAND_US);
+  radio.setBandwidth(RF69_DAVIS_BW_WIDE);
 
-    radio.setStations(stations, 1);
-   radio.initialize(FREQ_BAND_US);
-   radio.setBandwidth(RF69_DAVIS_BW_WIDE);
 
   xTaskCreate(xReadRadioTask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 1,&xReadRadioTaskHandle);
   radio.xReadRadioTaskHandle=xReadRadioTaskHandle;
   xTaskCreate(xNTPClientTask,     "NTP Task",       1024, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle); // Start NTP Update task
   xTaskCreate(xinterruptHandlertask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 3,&xinterrupttaskhandle);
+  xTaskCreate(xUpdateWundergroundInfce,"Wunderground Interface Task",1024, NULL,tskIDLE_PRIORITY + 1,&xUpdateWundergroundInfcetaskhandle);
   Serial.println("Boot complete!");
 
   vTaskStartScheduler(); // Start task scheduler
@@ -345,12 +464,20 @@ void decode_packet(RadioData* rd) {
         //val = (packet[3]* 256 + packet[4]) / 160;
         val = ((int16_t)((packet[3]<<8) | packet[4])) / 16;
         print_value("temp", (float)(val / 10.0), F(", "));
+        #ifdef _USE_TH_SENSOR
+          temperature = (float)(val / 10.0);
+          tempf = temperature;
+          tempc = (temperature -32)*5/9;
+        #endif
       }
       break;
 
     case VP2P_HUMIDITY:
       val = ((packet[4] >> 4) << 8 | packet[3]) / 10; // 0 -> no sensor
       print_value("rh", (float)val, F(", "));
+      #ifdef _USE_TH_SENSOR
+        humidity = (float)val;
+      #endif
       break;
 
     case VP2P_WINDGUST:
@@ -439,17 +566,28 @@ if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time o
   taskYIELD();
 }}
 
+/* 
 // NTP Task polls NTP and updates the RTC
+// The Davis ISS transmitter hops between 51 channels. 
+// Thus it can take 1 or more minutes to sync with
+// a Davis ISS transmitter. 
+// 
+// The NTP client has a 6 second timeout. Its important
+// we poll NTP less than once per minute to allow the radio
+// to find and sync a station. 
+// Need to write a thread-safe NTP client. 
+*/ 
 static void xNTPClientTask(void *pvParameters){
 long taskStart, taskEnd;
 //timeClient.setUpdateInterval(60000);
 while(true){
 taskStart = millis();
 bool shouldUpdateRTC = false; // Only update RTC if NTP update is successfull 
-if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time over NTP
+if(xSemaphoreTake(SPIBusSemaphore,1)){// we need SPI bus semaphore to update time over NTP
 //Serial.println("NTP Task has mutex");
-       // timeClient must be called every loop to update NTP time 
-      if(timeClient.forceUpdate()) {// NTP client will update about once a minute. 
+       // timeClient can block for up to 6s for a timeout, or 10ms for a local time server. 
+       // may need figure out how to change the timeout to 100ms or better. 
+      if(timeClient.forceUpdate()) {// since we need to hold the SPI bus, it makes more sense to force an update rather than poll the function using update(). Just need to force update less than once per minute. 
           if(timeClient.isTimeSet()){ // sanity check 
             shouldUpdateRTC = true;// Update the RTC only when necessary
             //debug strings
@@ -479,9 +617,10 @@ if(shouldUpdateRTC){
 #endif
 taskEnd = millis()-taskStart;
 //Serial.print("NTP task: "); Serial.println(taskEnd);
-if(shouldUpdateRTC){ // If the time was updated, sleep for 10 minutes
+// Slee
+if(shouldUpdateRTC){ // If the time was updated, sleep for 10 minutes 
     vTaskDelay( 600000/portTICK_PERIOD_MS );
-} else { // If the time could not be updated, sleep for just 2 minutes
+} else { // If the time could not be updated, sleep for just 2 minutes.
   vTaskDelay( 120000/portTICK_PERIOD_MS );
 }
 
@@ -501,7 +640,6 @@ radio.PayloadReady = digitalRead(RFM69_INT);
    if(radio.PayloadReady){ 
       radio.PayloadReadyTicks = xTaskGetTickCount();
     xTaskResumeFromISR(xinterrupttaskhandle);}
- //   vTaskNotifyGiveFromISR(xinterrupttaskhandle,&pxHigherPriorityTaskWoken);
 }
 
 static void xinterruptHandlertask(void *pvParameters){
@@ -513,8 +651,6 @@ while(true){
 
   if (xSemaphoreTake(SPIBusSemaphore,100)) {
 //      Serial.println("xInterruptTask took mutex");
-//          vTaskSuspendAll();
-//    taskENTER_CRITICAL( );
 //    radio.RSSI = radio.readRSSI();  // Read up front when it is most likely the carrier is still up
     if (radio._mode == RF69_MODE_RX && (radio.readReg(REG_IRQFLAGS2) & RF_IRQFLAGS2_PAYLOADREADY)) {
       radio.FEI = word(radio.readReg(REG_FEIMSB), radio.readReg(REG_FEILSB));
@@ -542,4 +678,193 @@ while(true){
   } else {
       taskYIELD();
   }}
+}
+
+// Webserver task polls for web clients and serves webpages 
+// to be inplemented
+static void xHTTPUpdateTask(void *pvParameters){
+char PostActionBuf[64];
+while(true){
+  if(xSemaphoreTake(SPIBusSemaphore,5)){
+    HTTPClient = server.available();
+    if (HTTPClient) {
+      Serial.println("new client");
+      // an HTTP request ends with a blank line
+      bool currentLineIsBlank = true;
+    if (HTTPClient.connected()) {
+      PostParser postParser = PostParser(HTTPClient); // create our parser
+      while (HTTPClient.available()) {
+        char c = HTTPClient.read();
+        postParser.addHeaderCharacter(c); // compose the header
+        Serial.write(c);
+        // if you've gotten to the end of the line (received a newline
+        // character) and the line is blank, the HTTP request has ended,
+        // so you can send a reply
+        if (c == '\n' && currentLineIsBlank) {
+
+        postParser.grabPayload();
+        postParser.getField("i").toCharArray(PostActionBuf, sizeof(PostActionBuf));
+        Serial.println(PostActionBuf);
+        postParser.getField("p").toCharArray(PostActionBuf, sizeof(PostActionBuf));
+        Serial.println(PostActionBuf);
+
+            Serial.println(postParser.getHeader()); // print the header for debugging
+          delay(10); //used to make sure the 2 serial prints don't overlap each other
+          Serial.println(postParser.getPayload()); // print the payload for debugging
+
+
+          // send a standard HTTP response header
+          HTTPClient.println("HTTP/1.1 200 OK");
+          HTTPClient.println("Content-Type: text/html");
+          HTTPClient.println("Connection: close");  // the connection will be closed after completion of the response
+         // HTTPClient.println("Refresh: 5");  // refresh the page automatically every 5 sec
+          HTTPClient.println();
+          HTTPClient.println("<!DOCTYPE HTML>");
+          HTTPClient.println("<html>");
+
+          //String Page;
+          HTTPClient.println("<!DOCTYPE html><html lang='en'><head>");
+          HTTPClient.println("<meta name='viewport' content='width=device-width'>");
+          HTTPClient.println("<title>CaptivePortal</title></head><body>");
+          HTTPClient.println("<nav style='border:1px solid black;'>");
+          HTTPClient.println( "<ul>");
+          HTTPClient.println("<a href='/weather'>weather</a> | ");
+          HTTPClient.println("<a href='/wifi'>wifi</a> | ");
+  HTTPClient.println("<a href='/sensors'>sensors</a> | ");
+  HTTPClient.println("<a href='/config'>config</a>");
+  HTTPClient.println("</ul>");
+  HTTPClient.println("</nav>");
+  // User Credentials section
+  HTTPClient.println("\r\n<form method='POST' action='savedevicecredentials'>");
+  HTTPClient.println("<form>");
+  HTTPClient.println("<h1>Device Credentials</h1>");
+  HTTPClient.println("<Label for 'DevicePassword'>Device Password:</label>");
+  HTTPClient.println("<Input type='password' id='DevicePassword' name='d'");
+  HTTPClient.println("<input type='submit' value='Save'/>");
+  HTTPClient.println("</form>");
+  HTTPClient.println("<h1>network</h1>");
+  HTTPClient.println("</table>");
+  HTTPClient.println("\r\n<br /><form method='POST' action='networksave'>");
+  HTTPClient.println("<label>NTP Server</label>");
+  HTTPClient.println("<input type='url' placeholder='pool.ntp.org'");
+//  HTTPClient.println F("'network'");
+  HTTPClient.println(" name='n'/>");
+  HTTPClient.println("<br /><label>DNS Server</label>");
+  HTTPClient.println("<input type='text' placeholder='password' name='p'/>");
+  HTTPClient.println("<br /><input type='submit' value='Save'/></form>");
+  HTTPClient.println("<br />");
+
+  HTTPClient.println("<h1>wunderground</h1>");
+  HTTPClient.println("</table>");
+  HTTPClient.println("<form method='POST' action='wundergroundsave'>");
+  HTTPClient.println("<label>Enable</label>");
+  HTTPClient.println("<input type='checkbox' ");
+//  if(WundergroundInfceEnable==true){
+//    HTTPClient.println("checked");
+//  }
+  HTTPClient.println(" name='e'/><br />");
+
+//  HTTPClient.println("<Label for 'WundergroundTimeSource'>Time Source </label>");
+//  HTTPClient.println("<select name='z' id='WundergroundTimeSource'>");
+//  HTTPClient.println("<option value='1'");if(WundergroundTimeSource==WU_NOW_T){HTTPClient.println("selected");} HTTPClient.println(">&now</option>");
+//  #ifdef _USE_RTC
+//    HTTPClient.println("<option value='2'");if(WundergroundTimeSource==WU_RTC_T){HTTPClient.println("selected");} HTTPClient.println(">rtc</option>");
+//  #endif
+//  HTTPClient.println("<option value='3'");if(WundergroundTimeSource==WU_NTP_T){HTTPClient.println("selected");} HTTPClient.println(">ntp</option>");
+//  HTTPClient.println("</select><br />");
+
+  HTTPClient.println("<label>Wunderground ID</label>");
+  HTTPClient.println("<input type='text' placeholder='ID'");
+
+//  if(strlen(WundergroundStationID)>0){
+//      HTTPClient.println(" value='");
+      //HTTPClient.println String(WundergroundStationID);
+//      HTTPClient.println("'");
+//  }
+  HTTPClient.println(" name='i'/>");
+  HTTPClient.println("<br /><label>Wunderground Password</label>");
+  HTTPClient.println("<input type='text' placeholder='password' value='");
+  //HTTPClient.println String(WundergroundStationPassword); 
+  HTTPClient.println("' name='p'/><br />");
+    HTTPClient.println("<Label for 'WundergroundThermometerID'>Thermometer ID </label>");
+    HTTPClient.println("<select name='t' id='WundergroundThermometerID'>");
+//    if(UseCelcius){
+//      HTTPClient.println("<option value='");Page + String(WU_S_TEMPC_T);HTTPClient.println("'");if(thermometer1Type==WU_S_TEMPC_T){HTTPClient.println("selected");} HTTPClient.println(">tempc</option>");
+//      HTTPClient.println("<option value='");Page + String(WU_S_TEMPC2_T);HTTPClient.println("'");if(thermometer1Type==WU_S_TEMPC2_T){HTTPClient.println("selected");} HTTPClient.println(">tempc2</option>");
+//      HTTPClient.println("<option value='");Page + String(WU_S_TEMPC3_T);if(thermometer1Type==WU_S_TEMPC3_T){HTTPClient.println F("selected");} HTTPClient.println F(">tempc3</option>");
+//      HTTPClient.println("<option value='");Page + String(WU_S_TEMPC4_T);if(thermometer1Type==WU_S_TEMPC4_T){HTTPClient.println F("selected");} HTTPClient.println F(">tempc4</option>");
+//      HTTPClient.println("<option value='");Page + String(WU_S_INDOORTEMPC_T);if(thermometer1Type==WU_S_INDOORTEMPC_T){HTTPClient.println F("selected");} HTTPClient.println F(">indoortempc</option>");
+//      HTTPClient.println("<option value='");Page + String(WU_S_SOILTEMPC_T);if(thermometer1Type==WU_S_SOILTEMPC_T){HTTPClient.println F("selected");} HTTPClient.println F(">soiltempc</option>");
+//      HTTPClient.println("<option value='7'");if(thermometer1Type==7){HTTPClient.println F("selected");} HTTPClient.println F(">soiltempc2</option>");
+//      HTTPClient.println("<option value='8'");if(thermometer1Type==8){HTTPClient.println F("selected");} HTTPClient.println F(">soiltempc3</option>");
+//    }
+//    else
+//    {
+//      HTTPClient.println F("<option value='9'");if(thermometer1Type==9){HTTPClient.println F("selected");} HTTPClient.println F(">tempf</option>");
+//      HTTPClient.println F("<option value='10'");if(thermometer1Type==10){HTTPClient.println F("selected");} HTTPClient.println F(">tempf2</option>");
+//      HTTPClient.println F("<option value='11'");if(thermometer1Type==11){HTTPClient.println F("selected");} HTTPClient.println F(">tempf3</option>");
+//      HTTPClient.println F("<option value='12'");if(thermometer1Type==12){HTTPClient.println F("selected");} HTTPClient.println F(">tempf4</option>");
+//      HTTPClient.println F("<option value='13'");if(thermometer1Type==13){HTTPClient.println F("selected");} HTTPClient.println F(">indoortempf</option>");
+//      HTTPClient.println F("<option value='14'");if(thermometer1Type==14){HTTPClient.println F("selected");} HTTPClient.println F(">soiltemptempf</option>");
+//      HTTPClient.println F("<option value='15'");if(thermometer1Type==15){HTTPClient.println F("selected");} HTTPClient.println F(">soiltempf2</option>");
+//      HTTPClient.println F("<option value='16'");if(thermometer1Type==16){HTTPClient.println F("selected");} HTTPClient.println F(">soiltemp34</option>");
+//    }
+//  HTTPClient.println F("</select><br />");
+  //
+  HTTPClient.println("<Label for 'WundergroundHumidity1ID'>Humidity Sensor ID </label>");
+  HTTPClient.println("<select name='h' id='WundergroundHumidity1ID'>");
+  //HTTPClient.println F("<option value='18'");if(humidity1_sensor_type==WU_S_HUMIDITY_T){HTTPClient.println F("selected");} HTTPClient.println F(">humidity</option>");
+  //HTTPClient.println F("<option value='19'");if(humidity1_sensor_type==WU_S_INDOORHUMIDITY_T){HTTPClient.println F("selected");} HTTPClient.println F(">indoorhumidity</option>");
+  HTTPClient.println("</select><br />");
+  HTTPClient.println("<br /><input type='submit' value='Save'/></form>");
+  HTTPClient.println("<br />");
+
+  HTTPClient.println("<label>");
+  //HTTPClient.println String(WundergroundHTTPString);
+  HTTPClient.println("</label>");
+  HTTPClient.println("<br />");
+
+  HTTPClient.println("<label>");
+ // HTTPClient.println String(WundergroundResponseCode);
+  HTTPClient.println("</label>");
+  HTTPClient.println("<br />");
+
+  HTTPClient.println("<label>");
+ // HTTPClient.println(WundergrondResponse);
+  HTTPClient.println("</label>");
+  HTTPClient.println("<br />");
+
+  HTTPClient.println("<h2>Restore Defaults</h2>");
+  HTTPClient.println("\r\n<br /><form method='POST' action='restoredefaults'><br />");
+  HTTPClient.println("<br /><input type='submit' value='Save'/></form>");
+
+  HTTPClient.println("</body>");
+
+          HTTPClient.println("</html>");
+          break;
+        }
+        if (c == '\n') {
+          // you're starting a new line
+          currentLineIsBlank = true;
+        } 
+        else if (c != '\r') {
+          // you've gotten a character on the current line
+          currentLineIsBlank = false;
+        }
+      }
+    }
+      // give the web browser time to receive the data
+      delay(1);
+      // close the connection:
+      HTTPClient.stop();
+
+
+      //HTTPClient.
+    }
+    // Give up the semaphore and sleep 250ms
+    xSemaphoreGive( SPIBusSemaphore );
+  }
+  vTaskDelay( 2000/portTICK_PERIOD_MS );
+  //taskYIELD();
+}
 }

@@ -19,7 +19,7 @@
 //#include "TimerOne.h"
 //#include "Adafruit_ZeroTimer.h"
 #include "PacketFifo.h"
-
+#include "WundergroundInfce.h"
 #ifndef DAVISRFM69_DEBUG
  //#define DAVISRFM69_DEBUG
 #endif
@@ -333,6 +333,7 @@ void DavisRFM69::loop() {
     if (stations[i].interval == 0) {
       mode = SM_SEARCHING;
       all_sync = false;
+
       if (stations[i].syncBegan == 0) {
         // we have never tried to sync to this station
 #ifdef DAVISRFM69_DEBUG
