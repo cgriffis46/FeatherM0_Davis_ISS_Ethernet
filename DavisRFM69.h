@@ -91,7 +91,7 @@ static const __attribute__((progmem)) char RFM69_MODE_STRINGS[COUNT_RF69_MODES][
 #define RF69_FSTEP 61.03515625 	// == FXOSC/2^19 = 32mhz/2^19 (p13 in DS)
 
 #define RESYNC_THRESHOLD 50       // max. number of lost packets from a station before rediscovery
-#define LATE_PACKET_THRESH 5000   // packet is considered missing after this many micros
+#define LATE_PACKET_THRESH 10000   // packet is considered missing after this many micros
 #define POST_RX_WAIT 2000         // RX "settle" delay
 #define MAX_STATIONS 8            // max. stations this code is able to handle
 
@@ -121,16 +121,20 @@ typedef struct __attribute__((packed)) Station {
   byte repeaterId;        	// repeater id when packet is coming via a repeater, otherwise 0
                           	// repeater IDs A..H are stored as 0x8..0xf here
   
-  TickType_t lastRx;   	 	// last time a packet is seen or should have been seen when missed
-  TickType_t lastSeen; 	 	// last factual reception time
-  TickType_t interval;    	// packet transmit interval for the station: (41 + id) / 16 * 1M microsecs
+  uint32_t lastRx;   	 	// last time a packet is seen or should have been seen when missed
+  uint32_t lastSeen; 	 	// last factual reception time
+  uint32_t interval;    	// packet transmit interval for the station: (41 + id) / 16 * 1M microsecs
   uint32_t numResyncs;  	// number of times discovery of this station started because of packet loss
   uint32_t packets; 		// total number of received packets after (re)restart
   uint32_t missedPackets;	// total number of misssed packets after (re)restart
   uint32_t lostPackets;     // missed packets since a packet was last seen from this station
-  TickType_t syncBegan; 		// time sync began for this station.
-  TickType_t recvBegan; 		// time we tuned in to receive
-  TickType_t earlyAmt;		// microseconds from when we turned on rx to when the last packet was rx'ed (for tuning, we want this small)
+  uint32_t syncBegan; 		// time sync began for this station.
+  uint32_t recvBegan; 		// time we tuned in to receive
+  uint32_t earlyAmt;		// microseconds from when we turned on rx to when the last packet was rx'ed (for tuning, we want this small)
+
+  uint32_t last_sync_word; // last time we saw a sync word (start of transmission)
+  uint32_t next_tx_time; 
+
   byte progress;			// search(sync) progress in percent.
   byte channel;           	// rx channel the next packet of the station is expected on (moved by amm for packing on 32 bit machines)
 };
@@ -159,10 +163,10 @@ class DavisRFM69 {
 	static volatile uint32_t lastDiscStep;
 	static volatile uint32_t int_ticks;
 
-	volatile TickType_t rfm69_mode_timer;
+	volatile uint32_t rfm69_mode_timer;
 	volatile uint32_t rfm69_mode_counts[COUNT_RF69_MODES];
-	volatile TickType_t SyncAddressSeen;
-  volatile TickType_t PayloadReadyTicks;
+	volatile uint32_t SyncAddressSeen;
+  volatile uint32_t PayloadReadyTicks;
   volatile bool PayloadReady = false;
   volatile bool ModeReady = false;
 
@@ -212,7 +216,7 @@ class DavisRFM69 {
 	int findStation(byte id);
 	void handleRadioInt();
 
-	uint32_t difftime(TickType_t after, TickType_t before);
+	uint32_t difftime(uint32_t after, uint32_t before);
 	void loop(); // like handleRadioInt but for systems that want to poll rather than run a hardware timer to tick the radio system.
 
 	void initStations();

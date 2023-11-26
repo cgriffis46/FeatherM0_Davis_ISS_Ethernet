@@ -149,7 +149,9 @@ enum {
 static void xUpdateWundergroundInfce(void *pvParameters); // Must be called in main loop 
 
 #endif
-
+/*
+  Definitions for RFM69 Radio
+*/
 #define LED 13
 #define SERIAL_BAUD 19200
 
@@ -540,6 +542,8 @@ attachInterrupt(6,ModeReadyInterrupt,CHANGE);
 
 while(true){
 //   vTaskSuspend(NULL);
+//if(radio.ModeReady){
+
 if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time over NTP
 //Serial.println("xRadio Task has Mutex");
     if (radio.mode == SM_RECEIVING) {
@@ -562,7 +566,7 @@ if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time o
 
 //  Serial.println("Radio Task gives up mutex");
   xSemaphoreGive( SPIBusSemaphore );
-} 
+}
   taskYIELD();
 }}
 
@@ -627,7 +631,7 @@ if(shouldUpdateRTC){ // If the time was updated, sleep for 10 minutes
 }}// end of thread
 
 void RSSIThresholdInterrupt(){
-  radio.SyncAddressSeen = xTaskGetTickCount();
+  radio.SyncAddressSeen = micros();
   //Serial.print(radio.SyncAddressSeen);
   //Serial.println(": Sync Word ");
 }
@@ -638,7 +642,7 @@ void interruptHandler() {
 //    Serial.println("Interrupt");
 radio.PayloadReady = digitalRead(RFM69_INT);
    if(radio.PayloadReady){ 
-      radio.PayloadReadyTicks = xTaskGetTickCount();
+      radio.PayloadReadyTicks = micros();
     xTaskResumeFromISR(xinterrupttaskhandle);}
 }
 
@@ -648,7 +652,7 @@ byte i = 0;
 attachInterrupt(RFM69_INT, interruptHandler, RISING);
 vTaskSuspend(NULL);
 while(true){
-
+//if(radio.ModeReady){
   if (xSemaphoreTake(SPIBusSemaphore,100)) {
 //      Serial.println("xInterruptTask took mutex");
 //    radio.RSSI = radio.readRSSI();  // Read up front when it is most likely the carrier is still up
@@ -675,6 +679,7 @@ while(true){
     xTaskNotifyGive(xReadRadioTaskHandle);
     vTaskSuspend(NULL);
     //xTaskResumeFromISR(xReadRadioTaskHandle);
+  //}
   } else {
       taskYIELD();
   }}
@@ -840,7 +845,7 @@ while(true){
 
   HTTPClient.println("</body>");
 
-          HTTPClient.println("</html>");
+  HTTPClient.println("</html>");
           break;
         }
         if (c == '\n') {
