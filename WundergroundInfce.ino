@@ -40,18 +40,21 @@ switch (PgmState) {
       
     if(WundergroundEthernetCclient.connect(wundergroundIP,80)>0){
       WundergroundHTTPString=WUget+WUcreds+date_str+Wundergroundpayload+W_Software_Type+action_str;
-      Serial.println(WundergroundHTTPString);
+      #ifdef _DEBUG_WU_INFCE
+        Serial.println(WundergroundHTTPString);
+      #endif
       WundergroundHTTPString.toCharArray(buffer, WundergroundHTTPString.length());
-          Serial.print("connected to ");
+      #ifdef _DEBUG_WU_INFCE
+        Serial.print("connected to ");
         Serial.println(WundergroundEthernetCclient.remoteIP());
-        // Make a HTTP request:
-        WundergroundEthernetCclient.print("GET ");
-        WundergroundEthernetCclient.print(buffer);
-        WundergroundEthernetCclient.println(" HTTP/1.1");
-        WundergroundEthernetCclient.println("Host: weatherstation.wunderground.com");
-        //WundergroundEthernetCclient.println(wundergroundIP);
-        WundergroundEthernetCclient.println("Connection: close");
-        WundergroundEthernetCclient.println();
+      #endif
+      // Make a HTTP request:
+      WundergroundEthernetCclient.print("GET ");
+      WundergroundEthernetCclient.print(buffer);
+      WundergroundEthernetCclient.println(" HTTP/1.1");
+      WundergroundEthernetCclient.println("Host: weatherstation.wunderground.com");
+      WundergroundEthernetCclient.println("Connection: close");
+      WundergroundEthernetCclient.println();
     }
 
     PgmState = SM_Wunderground_Infce_WaitForHTTP_Response;
@@ -65,14 +68,18 @@ switch (PgmState) {
     if (len > 80) len = 80;
         PgmState = SM_Wunderground_CloseConnections;
       WundergroundEthernetCclient.read(buf, len);
-      Serial.write(buf, len); // show in the serial monitor (slows some boards)
+      #ifdef _DEBUG_WU_INFCE
+        Serial.write(buf, len); // show in the serial monitor (slows some boards)
+      #endif
     }
 
     break;
   }
   case SM_Wunderground_CloseConnections:
-  {
-    Serial.println("disconnecting.");
+  { 
+    #ifdef _DEBUG_WU_INFCE
+      Serial.println("disconnecting.");
+    #endif
     WundergroundEthernetCclient.stop();
 
     PgmState = SM_Wunderground_Infce_Idle;
