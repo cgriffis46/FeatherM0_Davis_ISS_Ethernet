@@ -460,6 +460,8 @@ void DavisRFM69::handleRadioInt() {
     byte id = DATA[0] & 7;
     int stIx = findStation(id);
 
+
+
     // if we have no station cofigured for this id (at all; can still be be !active), ignore the packet
     // OR packet passed the repeater crc check, but no repeater is set for the station
     // OR packet passed the normal crc check, and repeater is set for the station
@@ -493,6 +495,7 @@ void DavisRFM69::handleRadioInt() {
     stations[stIx].earlyAmt = difftime(lastRx, stations[stIx].recvBegan);
     stations[stIx].lostPackets = 0;
     stations[stIx].lastRx = stations[stIx].lastSeen = lastRx;
+    stations[stIx].last_channel = CHANNEL;
     stations[stIx].channel = nextChannel(CHANNEL);
     stations[stIx].last_sync_word = SyncAddressSeen;
 #ifdef DAVISRFM69_DEBUG
