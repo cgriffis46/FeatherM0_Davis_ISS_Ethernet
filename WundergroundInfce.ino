@@ -95,7 +95,7 @@ switch (PgmState) {
       // Send temperature and humidity if necessary
       #ifdef _INFCE_SEND_TEMP_HUMIDITY
       if(QueueThermometerForInterfaces){
-
+      if(!(temperature==NAN)){
         switch (thermometer1Type) {
           case WU_S_TEMPC_T: 
           {
@@ -178,21 +178,24 @@ switch (PgmState) {
             break;
           }
 
-        }
+        }}
 
         }
         // Add humidity to update string 
         if(QueueHumidityForInterfaces){
-        switch (humidity1_sensor_type) {
-            case WU_S_HUMIDITY_T: {
-              Wundergroundpayload += "&humidity="+String(humidity,2);
-              break;
+          if(!humidity==NAN){
+            switch (humidity1_sensor_type) {
+              case WU_S_HUMIDITY_T: {
+                Wundergroundpayload += "&humidity="+String(humidity,2);
+                break;
+              }
+              case WU_S_INDOORHUMIDITY_T: {
+                Wundergroundpayload += "&indoorhumidity="+String(humidity,2);
+                break;
+              }
             }
-            case WU_S_INDOORHUMIDITY_T: {
-              Wundergroundpayload += "&indoorhumidity="+String(humidity,2);
-              break;
-            }
-        }}
+          }
+        }
       #endif
       // Send barometric pressure if necessary 
       #ifdef _INFCE_SEND_BAROMETRIC_PRESSURE

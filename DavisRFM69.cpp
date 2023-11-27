@@ -235,7 +235,8 @@ void DavisRFM69::loop() {
   // first see if we have tuned into receive a station previously and failed to actually receive a packet
   if (mode == SM_RECEIVING) {
     // packet was lost
-      if (difftime(micros(), stations[curStation].recvBegan) > (1+stations[curStation].lostPackets)*(LATE_PACKET_THRESH + TUNEIN_USEC)){
+//     if (difftime(micros(), stations[curStation].last_sync_word) > (1+stations[curStation].lostPackets)*stations[curStation].interval+(LATE_PACKET_THRESH + TUNEIN_USEC)){
+    if (difftime(micros(), stations[curStation].recvBegan) > (1+stations[curStation].lostPackets)*(LATE_PACKET_THRESH + TUNEIN_USEC)){
       //#ifdef DAVISRFM69_DEBUG
       Serial.print(micros());
       Serial.print(": missed packet from station ");
@@ -248,7 +249,6 @@ void DavisRFM69::loop() {
       stations[curStation].lostPackets++;
       //stations[curStation].lastRx += stations[curStation].interval;
       stations[curStation].channel = nextChannel(stations[curStation].channel);
-
       // lost a station
       if (stations[curStation].lostPackets > RESYNC_THRESHOLD) {
         //#ifdef DAVISRFM69_DEBUG
@@ -289,9 +289,10 @@ void DavisRFM69::loop() {
         Serial.print(" channel ");
         Serial.println(stations[i].channel);
 #endif
-        setChannel(stations[i].channel);
-        stations[i].recvBegan = micros();
-
+      	stations[i].recvBegan = micros();
+        //Serial.print("Next Tx: ");Serial.println((difftime(micros(), stations[i].last_sync_word)/stations[i].interval+stations[i].channel)%getBandTabLength());
+        //Serial.print("Next Tx: ");Serial.println(difftime(micros(), stations[curStation].last_sync_word)/stations[curStation].interval%getBandTabLength());
+	  		setChannel(stations[i].channel);
         // we are now set to receive from this station.
         mode = SM_RECEIVING;
         curStation = i;

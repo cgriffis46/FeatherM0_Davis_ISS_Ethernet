@@ -20,8 +20,8 @@
 #ifdef _USE_TH_SENSOR
 //static void readTempHumiditySensor();
 //  Ticker readTHSensorTicker(readTempHumiditySensor,2,0);
-  float temperature, humidity;
-  float tempf, tempc;
+  float temperature = NAN, humidity = NAN;
+  float tempf=NAN, tempc=NAN;
   bool QueueThermometerForInterfaces = true;
   bool QueueHumidityForInterfaces = true;
   bool UseCelcius = false;
@@ -535,7 +535,7 @@ static void xReadRadioTask(void *pvParameters){
   long startTime,endTime;
 //vTaskSuspend(NULL);
 pinMode(5,INPUT_PULLUP);
-attachInterrupt(5, RSSIThresholdInterrupt, RISING);
+attachInterrupt(5,SyncAddressISR, RISING);
 attachInterrupt(6,ModeReadyInterrupt,CHANGE);
 //attachInterrupt(6,ModeReadyInterruptLow,FALLING);
 //attachInterrupt(9,ModeReadyInterrupt,),
@@ -630,7 +630,7 @@ if(shouldUpdateRTC){ // If the time was updated, sleep for 10 minutes
 
 }}// end of thread
 
-void RSSIThresholdInterrupt(){
+void SyncAddressISR(){
   radio.SyncAddressSeen = micros();
   //Serial.print(radio.SyncAddressSeen);
   //Serial.println(": Sync Word ");
