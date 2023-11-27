@@ -568,7 +568,8 @@ if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time o
   xSemaphoreGive( SPIBusSemaphore );
 }
   //taskYIELD();
-  vTaskDelay( 5/portTICK_PERIOD_MS );
+  //vTaskDelay( 5/portTICK_PERIOD_MS );
+  xTaskNotifyWait(0,0,NULL,1/portTICK_PERIOD_MS); // need to share the mcu but wake up quickly if a packet arrives or timeout occurs
 }}
 
 /* 
@@ -631,12 +632,16 @@ if(shouldUpdateRTC){ // If the time was updated, sleep for 10 minutes
 
 }}// end of thread
 
+// The sync word is the start of the packet. 
+// we can use the time the packet arrived to sync
+// with the transmitter. 
 void SyncAddressISR(){
   radio.SyncAddressSeen = micros();
   //Serial.print(radio.SyncAddressSeen);
   //Serial.println(": Sync Word ");
 }
 
+// Payload ready interrupt 
 void interruptHandler() {
   uint32_t ulStatusRegister;
   BaseType_t pxHigherPriorityTaskWoken;
