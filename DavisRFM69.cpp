@@ -248,7 +248,7 @@ void DavisRFM69::loop() {
       stations[curStation].missedPackets++;
       stations[curStation].lostPackets++;
       //stations[curStation].lastRx += stations[curStation].interval;
-      stations[curStation].channel = (difftime(micros(), stations[curStation].last_sync_word)/stations[curStation].interval+stations[curStation].last_channel+1)%getBandTabLength();
+      stations[curStation].channel = (byte)((difftime(micros(), stations[curStation].last_sync_word)/stations[curStation].interval+stations[curStation].last_channel+1)%getBandTabLength());
       //stations[curStation].channel = nextChannel(stations[curStation].channel);
       // lost a station
       if (stations[curStation].lostPackets > RESYNC_THRESHOLD) {
@@ -291,7 +291,7 @@ void DavisRFM69::loop() {
         Serial.println(stations[i].channel);
 #endif
       	stations[i].recvBegan = micros();
-        stations[i].channel = (difftime(micros(), stations[i].last_sync_word)/stations[i].interval+stations[i].last_channel+1)%getBandTabLength();
+        stations[i].channel = (byte)((difftime(micros(), stations[i].last_sync_word)/stations[i].interval+stations[i].last_channel+1)%getBandTabLength());
         //Serial.print("Next Tx (sys): ");Serial.println(stations[i].channel);
 	  		setChannel(stations[i].channel);
         // we are now set to receive from this station.
@@ -497,9 +497,9 @@ void DavisRFM69::handleRadioInt() {
     stations[stIx].lostPackets = 0;
     stations[stIx].lastRx = stations[stIx].lastSeen = lastRx;
     stations[stIx].last_channel = CHANNEL;
-    stations[stIx].channel = nextChannel(CHANNEL);
-    
+    //stations[stIx].channel = nextChannel(CHANNEL);
     stations[stIx].last_sync_word = SyncAddressSeen;
+    stations[stIx].channel = (byte)((difftime(micros(), stations[curStation].last_sync_word)/stations[curStation].interval+stations[curStation].last_channel+1)%getBandTabLength());
 #ifdef DAVISRFM69_DEBUG
     Serial.print("early amt = ");
     Serial.println(stations[stIx].earlyAmt);

@@ -277,7 +277,7 @@ void setup() {
   radio.setBandwidth(RF69_DAVIS_BW_WIDE);
 
 
-  xTaskCreate(xReadRadioTask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 1,&xReadRadioTaskHandle);
+  xTaskCreate(xReadRadioTask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 2,&xReadRadioTaskHandle);
   radio.xReadRadioTaskHandle=xReadRadioTaskHandle;
   xTaskCreate(xNTPClientTask,     "NTP Task",       1024, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle); // Start NTP Update task
   xTaskCreate(xinterruptHandlertask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 3,&xinterrupttaskhandle);
@@ -567,7 +567,8 @@ if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time o
 //  Serial.println("Radio Task gives up mutex");
   xSemaphoreGive( SPIBusSemaphore );
 }
-  taskYIELD();
+  //taskYIELD();
+  vTaskDelay( 5/portTICK_PERIOD_MS );
 }}
 
 /* 
