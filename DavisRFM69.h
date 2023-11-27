@@ -91,7 +91,7 @@ static const __attribute__((progmem)) char RFM69_MODE_STRINGS[COUNT_RF69_MODES][
 #define RF69_FSTEP 61.03515625 	// == FXOSC/2^19 = 32mhz/2^19 (p13 in DS)
 
 #define RESYNC_THRESHOLD 50       // max. number of lost packets from a station before rediscovery
-#define LATE_PACKET_THRESH 5000   // packet is considered missing after this many micros
+#define LATE_PACKET_THRESH 10000   // packet is considered missing after this many micros
 #define POST_RX_WAIT 2000         // RX "settle" delay
 #define MAX_STATIONS 8            // max. stations this code is able to handle
 
@@ -137,6 +137,7 @@ typedef struct __attribute__((packed)) Station {
 
   byte progress;			// search(sync) progress in percent.
   byte channel;           	// rx channel the next packet of the station is expected on (moved by amm for packing on 32 bit machines)
+  byte last_channel;
 };
 
 class DavisRFM69 {

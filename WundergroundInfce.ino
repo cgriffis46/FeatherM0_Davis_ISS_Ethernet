@@ -183,8 +183,8 @@ switch (PgmState) {
         }
         // Add humidity to update string 
         if(QueueHumidityForInterfaces){
-          if(!humidity==NAN){
-            switch (humidity1_sensor_type) {
+          if(!(humidity==NAN)){ // sanity check 
+            switch (humidity1_sensor_type) { 
               case WU_S_HUMIDITY_T: {
                 Wundergroundpayload += "&humidity="+String(humidity,2);
                 break;
