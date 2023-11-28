@@ -53,7 +53,7 @@
 
 extern SemaphoreHandle_t SPIBusSemaphore;
 
-//#define DAVISRFM69_DEBUG
+#define DAVISRFM69_DEBUG
 
 volatile byte DavisRFM69::DATA[DAVIS_PACKET_LEN];
 volatile byte DavisRFM69::_mode = RF69_MODE_INIT;  // current transceiver state
@@ -120,10 +120,11 @@ void DavisRFM69::initialize(byte freqBand) {
     /* 0x25 */ { REG_DIOMAPPING1, RF_DIOMAPPING1_DIO0_00|RF_DIOMAPPING1_DIO3_01},                                                                                                               //DIO0 is the only IRQ we're using
     /* 0x26 RegDioMapping2 */
     {REG_DIOMAPPING2,RF_DIOMAPPING2_DIO5_11|RF_DIOMAPPING2_CLKOUT_OFF},
-    /* 0x27 RegIRQFlags1 */ {REG_IRQFLAGS1,RF_IRQFLAGS1_RSSI},
+    /* 0x27 RegIRQFlags1 */ {REG_IRQFLAGS1,RF_IRQFLAGS1_RSSI|RF_IRQFLAGS1_TIMEOUT},
     /* 0x28 */ { REG_IRQFLAGS2, RF_IRQFLAGS2_FIFOOVERRUN },                                                                                                               // Reset the FIFOs. Fixes a problem I had with bad first packet.
     /* 0x29 */ { REG_RSSITHRESH, 190 },                                                                                                                                   // real dBm = -(REG_RSSITHRESH / 2) -> 190 raw = -95 dBm
-                                                                                                                                                                          /* 0x2a & 0x2b RegRxTimeout1 and 2, respectively */
+    ///* 0x2a RegRxTimeout1 */ {REG_RXTIMEOUT1,1},
+    /* 0x2b RegRxTimeout2 */ {REG_RXTIMEOUT2,0xFF},
                                                                                                                                                                           /* 0x2c RegPreambleMsb - use zero default */
     /* 0x2d */ { REG_PREAMBLELSB, 0x4 },                                                                                                                                  // Davis has four preamble bytes 0xAAAAAAAA -- use 6 for TX for this setup
     /* 0x2e */ { REG_SYNCCONFIG, RF_SYNC_ON | RF_SYNC_FIFOFILL_AUTO | RF_SYNC_SIZE_2 | RF_SYNC_TOL_2 },                                                                   // Allow a couple erros in the sync word
@@ -248,7 +249,9 @@ void DavisRFM69::loop() {
       stations[curStation].missedPackets++;
       stations[curStation].lostPackets++;
       //stations[curStation].lastRx += stations[curStation].interval;
+      stations[curStation].lastRx = stations[curStation].last_sync_word + stations[curStation].interval*stations[curStation].lostPackets;
       stations[curStation].channel = (byte)((difftime(micros(), stations[curStation].last_sync_word)/stations[curStation].interval+stations[curStation].last_channel+1)%getBandTabLength());
+      setChannel(stations[curStation].channel);
       //stations[curStation].channel = nextChannel(stations[curStation].channel);
       // lost a station
       if (stations[curStation].lostPackets > RESYNC_THRESHOLD) {
@@ -282,7 +285,9 @@ void DavisRFM69::loop() {
   for (i = 0; i < numStations; i++) {
     // interval is filled in once we discover a station
     if (stations[i].interval > 0) {
-	  	if (difftime(stations[i].last_sync_word + stations[i].interval*(1+stations[i].lostPackets), micros()) < ((1+stations[i].lostPackets)*TUNEIN_USEC)){
+      //if (difftime(stations[i].lastRx + stations[i].interval, micros()) < ( (1+stations[i].lostPackets)*TUNEIN_USEC)){
+      if (difftime(stations[i].last_sync_word + stations[i].interval*(1+stations[i].lostPackets), micros()) < ((1+stations[i].lostPackets)*TUNEIN_USEC)){
+//	  	if (difftime(stations[i].last_sync_word + stations[i].interval*(1+stations[i].lostPackets), micros()) < ((1+stations[i].lostPackets)*TUNEIN_USEC)){
 #ifdef DAVISRFM69_DEBUG
         Serial.print(micros());
         Serial.print(": tune to station ");
@@ -291,7 +296,7 @@ void DavisRFM69::loop() {
         Serial.println(stations[i].channel);
 #endif
       	stations[i].recvBegan = micros();
-        stations[i].channel = (byte)((difftime(micros(), stations[i].last_sync_word)/stations[i].interval+stations[i].last_channel+1)%getBandTabLength());
+        //stations[i].channel = (byte)((byte)(difftime(micros(), stations[i].last_sync_word)/stations[i].interval+stations[i].last_channel+1)%getBandTabLength());
         //Serial.print("Next Tx (sys): ");Serial.println(stations[i].channel);
 	  		setChannel(stations[i].channel);
         // we are now set to receive from this station.
@@ -473,7 +478,7 @@ void DavisRFM69::handleRadioInt() {
       return;
     }
 
-    if (stationsFound < numStations && stations[stIx].interval == 0) {
+    if (stationsFound < numStations && stations[stIx].interval == 0) { // interval will be 0 if we are not in sync with station 
       stations[stIx].interval = (41 + id) * 1000000 / 16; // Davis' official tx interval in us
 
       stationsFound++;
@@ -484,6 +489,10 @@ void DavisRFM69::handleRadioInt() {
       Serial.println(stations[stIx].interval);
 #endif
       if (lostStations > 0) lostStations--;
+    } else { // if we are already in sync with station, try calculating the interval
+     // if(stations[stIx].last_sync_word>0){
+     //   stations[stIx].interval = (difftime(SyncAddressSeen,stations[stIx].last_sync_word))/(stations[stIx].lostPackets>0?stations[stIx].lostPackets:1);
+     // }
     }
 
     packets++;
@@ -497,9 +506,9 @@ void DavisRFM69::handleRadioInt() {
     stations[stIx].lostPackets = 0;
     stations[stIx].lastRx = stations[stIx].lastSeen = lastRx;
     stations[stIx].last_channel = CHANNEL;
-    //stations[stIx].channel = nextChannel(CHANNEL);
-    stations[stIx].last_sync_word = SyncAddressSeen;
-    stations[stIx].channel = (byte)((difftime(micros(), stations[curStation].last_sync_word)/stations[curStation].interval+stations[curStation].last_channel+1)%getBandTabLength());
+    stations[stIx].channel = nextChannel(CHANNEL);
+    stations[stIx].last_sync_word = Fifo_Not_Empty; //
+    //stations[stIx].channel = (byte)((difftime(micros(), stations[curStation].last_sync_word)/stations[curStation].interval+stations[curStation].last_channel+1)%getBandTabLength());
 #ifdef DAVISRFM69_DEBUG
     Serial.print("early amt = ");
     Serial.println(stations[stIx].earlyAmt);
@@ -769,8 +778,10 @@ void DavisRFM69::receiveBegin() {
   if (readReg(REG_IRQFLAGS2) & RF_IRQFLAGS2_PAYLOADREADY)
     writeReg(REG_PACKETCONFIG2, (readReg(REG_PACKETCONFIG2) & 0xFB) | RF_PACKET2_RXRESTART);  // avoid RX deadlocks
 
-  writeReg(REG_DIOMAPPING1, RF_DIOMAPPING1_DIO0_01|RF_DIOMAPPING1_DIO3_10);  //set DIO0 to "PAYLOADREADY" in receive mode
-  writeReg( REG_DIOMAPPING2,RF_DIOMAPPING2_DIO5_11|RF_DIOMAPPING2_CLKOUT_OFF);
+  writeReg(REG_DIOMAPPING1, RF_DIOMAPPING1_DIO0_01|RF_DIOMAPPING1_DIO1_11|RF_DIOMAPPING1_DIO2_00|RF_DIOMAPPING1_DIO3_10);  //set DIO0 to "PAYLOADREADY" in receive mode
+  writeReg(REG_DIOMAPPING2,RF_DIOMAPPING2_DIO5_11|RF_DIOMAPPING2_CLKOUT_OFF);
+  //writeReg(REG_RXTIMEOUT1,0xFF);
+  writeReg(REG_RXTIMEOUT2,0xFF);
   setMode(RF69_MODE_RX);
 
 }

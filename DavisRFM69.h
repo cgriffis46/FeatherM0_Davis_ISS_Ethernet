@@ -167,6 +167,8 @@ class DavisRFM69 {
 	volatile uint32_t rfm69_mode_timer;
 	volatile uint32_t rfm69_mode_counts[COUNT_RF69_MODES];
 	volatile uint32_t SyncAddressSeen;
+  volatile uint32_t Fifo_Not_Empty;
+  
   volatile uint32_t PayloadReadyTicks;
   volatile bool PayloadReady = false;
   volatile bool ModeReady = false;

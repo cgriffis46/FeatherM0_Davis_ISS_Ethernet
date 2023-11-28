@@ -280,7 +280,7 @@ void setup() {
   xTaskCreate(xReadRadioTask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 2,&xReadRadioTaskHandle);
   radio.xReadRadioTaskHandle=xReadRadioTaskHandle;
   xTaskCreate(xNTPClientTask,     "NTP Task",       1024, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle); // Start NTP Update task
-  xTaskCreate(xinterruptHandlertask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 3,&xinterrupttaskhandle);
+  //xTaskCreate(xinterruptHandlertask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 3,&xinterrupttaskhandle);
   xTaskCreate(xUpdateWundergroundInfce,"Wunderground Interface Task",1024, NULL,tskIDLE_PRIORITY + 1,&xUpdateWundergroundInfcetaskhandle);
   Serial.println("Boot complete!");
 
@@ -521,22 +521,18 @@ void printHex(volatile byte* packet, byte len) {
   }
 }
 
-void ModeReadyInterrupt(){
-  radio.ModeReady = digitalRead(6);
-  if(radio.ModeReady) {
-    //Serial.println("modeready");
-    }
-  else {
-    //Serial.println("modenotready");
-  }
-}
-
 static void xReadRadioTask(void *pvParameters){
   long startTime,endTime;
+  uint32_t ulInterruptStatus;
 //vTaskSuspend(NULL);
 pinMode(5,INPUT_PULLUP);
-attachInterrupt(5,SyncAddressISR, RISING);
+pinMode(12,INPUT_PULLUP);
+pinMode(11,INPUT_PULLUP);
+attachInterrupt(12,timeoutISR,RISING),
+attachInterrupt(5,SyncAddressISR,RISING);
 attachInterrupt(6,ModeReadyInterrupt,CHANGE);
+attachInterrupt(11,FifoNotEmptyISR,RISING);
+attachInterrupt(RFM69_INT, interruptHandler, RISING);
 //attachInterrupt(6,ModeReadyInterruptLow,FALLING);
 //attachInterrupt(9,ModeReadyInterrupt,),
 
@@ -546,6 +542,22 @@ while(true){
 
 if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time over NTP
 //Serial.println("xRadio Task has Mutex");
+  if((ulInterruptStatus&0x01)!=0x00){ // PayloadReady task notification from ISR
+    if (radio._mode == RF69_MODE_RX && (radio.readReg(REG_IRQFLAGS2) & RF_IRQFLAGS2_PAYLOADREADY)) {
+      radio.FEI = word(radio.readReg(REG_FEIMSB), radio.readReg(REG_FEILSB));
+      radio.setMode(RF69_MODE_STANDBY);
+      radio.select();  // Select RFM69 module, disabling interrupts
+      SPI.transfer(REG_FIFO & 0x7f);
+
+      for (int i = 0; i < DAVIS_PACKET_LEN; i++) radio.DATA[i] = radio.reverseBits(SPI.transfer(0));
+
+      radio._packetReceived = true;
+
+      radio.handleRadioInt();
+
+      radio.unselect();  // Unselect RFM69 module, enabling interrupts
+    }}
+
     if (radio.mode == SM_RECEIVING) {
     digitalWrite(LED, HIGH);
   } else if (radio.mode == SM_SEARCHING){
@@ -569,7 +581,7 @@ if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time o
 }
   //taskYIELD();
   //vTaskDelay( 5/portTICK_PERIOD_MS );
-  xTaskNotifyWait(0,0,NULL,1/portTICK_PERIOD_MS); // need to share the mcu but wake up quickly if a packet arrives or timeout occurs
+  xTaskNotifyWait(0,0,&ulInterruptStatus,1/portTICK_PERIOD_MS); // need to share the mcu but wake up quickly if a packet arrives or timeout occurs
 }}
 
 /* 
@@ -632,6 +644,7 @@ if(shouldUpdateRTC){ // If the time was updated, sleep for 10 minutes
 
 }}// end of thread
 
+// DIO 3 Sync Address Found
 // The sync word is the start of the packet. 
 // we can use the time the packet arrived to sync
 // with the transmitter. 
@@ -641,16 +654,39 @@ void SyncAddressISR(){
   //Serial.println(": Sync Word ");
 }
 
+// DIO 2 Fifo Not Empty
+// Copy the timestamp the Sync Address was seen. 
+// This is to grab the timestamp in case another 
+// sync address is seen before PayloadReady
+void FifoNotEmptyISR(){
+  radio.Fifo_Not_Empty = radio.SyncAddressSeen;
+}
+
+// DIO 1 Timeout 
+void timeoutISR(){
+  BaseType_t xHigherPriorityTaskWoken;
+  //uint32_t ulStatusRegister;
+  xTaskNotifyFromISR(xReadRadioTaskHandle,0,eNoAction,&xHigherPriorityTaskWoken);
+//  Serial.println("Timeout");
+}
 // Payload ready interrupt 
 void interruptHandler() {
   uint32_t ulStatusRegister;
   BaseType_t pxHigherPriorityTaskWoken;
-//    Serial.println("Interrupt");
+  //    Serial.println("Interrupt");
 radio.PayloadReady = digitalRead(RFM69_INT);
    if(radio.PayloadReady){ 
       radio.PayloadReadyTicks = micros();
-    xTaskResumeFromISR(xinterrupttaskhandle);}
+      xTaskNotifyFromISR(xReadRadioTaskHandle,0x01,eSetBits,&pxHigherPriorityTaskWoken);}
 }
+
+// the current mode (rx/tx/standby/sleep) is "ready"
+void ModeReadyInterrupt(){
+  radio.ModeReady = digitalRead(6);
+
+}
+
+/*
 
 static void xinterruptHandlertask(void *pvParameters){
 uint32_t ulNotifiedValue;
@@ -690,6 +726,7 @@ while(true){
       taskYIELD();
   }}
 }
+*/
 
 // Webserver task polls for web clients and serves webpages 
 // to be inplemented
