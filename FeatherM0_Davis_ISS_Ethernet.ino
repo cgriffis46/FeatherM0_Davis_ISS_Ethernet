@@ -538,14 +538,15 @@ while(true){
 
 if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time over NTP
 //Serial.println("xRadio Task has Mutex");
+// Check PayloadReady interrupt and clear the FIFO if needed 
   if((ulInterruptStatus&0x01)!=0x00){ // PayloadReady task notification from ISR
     if (radio._mode == RF69_MODE_RX && (radio.readReg(REG_IRQFLAGS2) & RF_IRQFLAGS2_PAYLOADREADY)) {
       radio.FEI = word(radio.readReg(REG_FEIMSB), radio.readReg(REG_FEILSB));
       radio.setMode(RF69_MODE_STANDBY); 
       radio.select();  // Select RFM69 module, disabling interrupts
-      SPI.transfer(REG_FIFO & 0x7f);
+      SPI.transfer(REG_FIFO & 0x7f); // Initiates FIFO transfer
 
-      for (int i = 0; i < DAVIS_PACKET_LEN; i++) radio.DATA[i] = radio.reverseBits(SPI.transfer(0));
+      for (int i = 0; i < DAVIS_PACKET_LEN; i++) radio.DATA[i] = radio.reverseBits(SPI.transfer(0)); // Reads FIFO
 
       radio._packetReceived = true;
 
@@ -553,7 +554,7 @@ if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time o
 
       radio.unselect();  // Unselect RFM69 module, enabling interrupts
     }}
-
+    // blink the LED if necessary
     if (radio.mode == SM_RECEIVING) {
     digitalWrite(LED, HIGH);
   } else if (radio.mode == SM_SEARCHING){
@@ -658,14 +659,17 @@ void FifoNotEmptyISR(){
   radio.Fifo_Not_Empty = radio.SyncAddressSeen;
 }
 
-// DIO 1 Timeout 
+// DIO 1 Timeout ISR
+// Radio will give a timeout interrupt if RSSI threshold is not reached. 
+// used to wake up the main task to change channels if necessary.
 void timeoutISR(){
   BaseType_t xHigherPriorityTaskWoken;
   //uint32_t ulStatusRegister;
   xTaskNotifyFromISR(xReadRadioTaskHandle,0,eNoAction,&xHigherPriorityTaskWoken);
 //  Serial.println("Timeout");
 }
-// Payload ready interrupt 
+// DIO0 PayloadReady ISR
+// Tells the main task data is available in the FIFO
 void interruptHandler() {
   uint32_t ulStatusRegister;
   BaseType_t pxHigherPriorityTaskWoken;
