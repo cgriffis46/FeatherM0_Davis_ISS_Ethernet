@@ -528,24 +528,20 @@ static void xReadRadioTask(void *pvParameters){
 pinMode(5,INPUT_PULLUP);
 pinMode(12,INPUT_PULLUP);
 pinMode(11,INPUT_PULLUP);
-attachInterrupt(12,timeoutISR,RISING),
-attachInterrupt(5,SyncAddressISR,RISING);
-attachInterrupt(6,ModeReadyInterrupt,CHANGE);
-attachInterrupt(11,FifoNotEmptyISR,RISING);
-attachInterrupt(RFM69_INT, interruptHandler, RISING);
-//attachInterrupt(6,ModeReadyInterruptLow,FALLING);
-//attachInterrupt(9,ModeReadyInterrupt,),
+attachInterrupt(12,timeoutISR,RISING), // DIO1 RFM69 Timeout 
+attachInterrupt(5,SyncAddressISR,RISING); // DIO 3 Sync Address
+attachInterrupt(6,ModeReadyInterrupt,CHANGE); // DIO 5 ModeReady 
+attachInterrupt(11,FifoNotEmptyISR,RISING); // DIO 2 FifoNotEmpty 
+attachInterrupt(RFM69_INT, interruptHandler, RISING); // DIO0 PayloadReady
 
 while(true){
-//   vTaskSuspend(NULL);
-//if(radio.ModeReady){
 
 if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time over NTP
 //Serial.println("xRadio Task has Mutex");
   if((ulInterruptStatus&0x01)!=0x00){ // PayloadReady task notification from ISR
     if (radio._mode == RF69_MODE_RX && (radio.readReg(REG_IRQFLAGS2) & RF_IRQFLAGS2_PAYLOADREADY)) {
       radio.FEI = word(radio.readReg(REG_FEIMSB), radio.readReg(REG_FEILSB));
-      radio.setMode(RF69_MODE_STANDBY);
+      radio.setMode(RF69_MODE_STANDBY); 
       radio.select();  // Select RFM69 module, disabling interrupts
       SPI.transfer(REG_FIFO & 0x7f);
 
