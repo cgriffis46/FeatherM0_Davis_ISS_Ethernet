@@ -503,8 +503,8 @@ void DavisRFM69::handleRadioInt() {
       // Calculate the station tx interval. If unable, use the default interval.
       // This should help maintain sync if the interval is not exactly spec 
       // if the interval is not exactly spec we may calculate the wrong next channel
-      if(stations[curStation].last_sync_word>0&stations[curStation].lostPackets==0) {
-          stations[curStation].interval = Fifo_Not_Empty - stations[curStation].last_sync_word;}
+      //if(stations[curStation].last_sync_word>0&stations[curStation].lostPackets==0) {
+      //    stations[curStation].interval = Fifo_Not_Empty - stations[curStation].last_sync_word;}
   
     }
 
