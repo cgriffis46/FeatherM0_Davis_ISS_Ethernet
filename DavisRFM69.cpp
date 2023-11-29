@@ -442,7 +442,7 @@ void DavisRFM69::handleTimerInt() {
 // Handle received packets, called from RFM69 ISR
 void DavisRFM69::handleRadioInt() {
 
-  uint32_t lastRx = micros();
+  uint32_t lastRx = Fifo_Not_Empty > 0 ? Fifo_Not_Empty : micros();
   uint16_t rxCrc = word(DATA[6], DATA[7]);              // received CRC
   uint16_t calcCrc = DavisRFM69::crc16_ccitt(DATA, 6);  // calculated CRC
 
@@ -500,18 +500,25 @@ void DavisRFM69::handleRadioInt() {
 
       stations[stIx].packets++;
       fifo.queue((byte *)DATA, CHANNEL, -RSSI, FEI, stations[curStation].lastSeen > 0 ? lastRx - stations[curStation].lastSeen : 0);
+      // Calculate the station tx interval. If unable, use the default interval.
+      // This should help maintain sync if the interval is not exactly spec 
+      // if the interval is not exactly spec we may calculate the wrong next channel
+      if(stations[curStation].last_sync_word>0&stations[curStation].lostPackets==0) {
+          stations[curStation].interval = Fifo_Not_Empty - stations[curStation].last_sync_word;}
+  
     }
 
     stations[stIx].earlyAmt = difftime(lastRx, stations[stIx].recvBegan);
     stations[stIx].lostPackets = 0;
-    stations[stIx].lastRx = stations[stIx].lastSeen = lastRx;
-    stations[stIx].last_channel = CHANNEL;
-    stations[stIx].channel = nextChannel(CHANNEL);
-    stations[stIx].last_sync_word = Fifo_Not_Empty; //
-    //stations[stIx].channel = (byte)((difftime(micros(), stations[curStation].last_sync_word)/stations[curStation].interval+stations[curStation].last_channel+1)%getBandTabLength());
+    stations[stIx].lastRx = stations[stIx].lastSeen = lastRx; // Last time a packet was received. 
+    stations[stIx].last_channel = CHANNEL; // The last channel we saw a packet. Useful if we need to calculate the next channel after losing sync. 
+    stations[stIx].channel = nextChannel(CHANNEL); // We just received a packet. Next channel should always be channel +1.
+    stations[stIx].last_sync_word = Fifo_Not_Empty; // Save a Timestamp of when the packet arrived. 
 #ifdef DAVISRFM69_DEBUG
-    Serial.print("early amt = ");
-    Serial.println(stations[stIx].earlyAmt);
+  Serial.print("Interval = ");
+  Serial.println(stations[curStation].interval);
+  Serial.print("early amt = ");
+  Serial.println(stations[stIx].earlyAmt);
 #endif
     // no longer waiting to RX (if we were at all anwyay)
     mode = SM_IDLE;
