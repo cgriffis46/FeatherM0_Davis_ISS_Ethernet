@@ -18,6 +18,7 @@
 #define DAVISRFM69_DEBUG
 #define _INFCE_SEND_TEMP_HUMIDITY
 #ifdef _USE_TH_SENSOR
+
 //static void readTempHumiditySensor();
 //  Ticker readTHSensorTicker(readTempHumiditySensor,2,0);
   float temperature = NAN, humidity = NAN;
@@ -524,6 +525,7 @@ void printHex(volatile byte* packet, byte len) {
 static void xReadRadioTask(void *pvParameters){
   long startTime,endTime;
   uint32_t ulInterruptStatus;
+  bool PayloadReady = false;
 //vTaskSuspend(NULL);
 pinMode(5,INPUT_PULLUP);
 pinMode(12,INPUT_PULLUP);
@@ -538,8 +540,10 @@ while(true){
 
 if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time over NTP
 //Serial.println("xRadio Task has Mutex");
+if((ulInterruptStatus&0x01)!=0x00){PayloadReady = true;} else {PayloadReady = false;}
+ xTaskNotifyStateClear(NULL);
 // Check PayloadReady interrupt and clear the FIFO if needed 
-  if((ulInterruptStatus&0x01)!=0x00){ // PayloadReady task notification from ISR
+  if(PayloadReady){ // PayloadReady task notification from ISR
     if (radio._mode == RF69_MODE_RX && (radio.readReg(REG_IRQFLAGS2) & RF_IRQFLAGS2_PAYLOADREADY)) {
       radio.FEI = word(radio.readReg(REG_FEIMSB), radio.readReg(REG_FEILSB));
       radio.setMode(RF69_MODE_STANDBY); 
@@ -553,6 +557,8 @@ if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time o
       radio.handleRadioInt();
 
       radio.unselect();  // Unselect RFM69 module, enabling interrupts
+      //ulTaskNotifyValueClearIndexed(NULL,0,0x01); // Clear notification bit for PayloadReady interrupt
+      PayloadReady = false;
     }}
     // blink the LED if necessary
     if (radio.mode == SM_RECEIVING) {
@@ -576,9 +582,13 @@ if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time o
 //  Serial.println("Radio Task gives up mutex");
   xSemaphoreGive( SPIBusSemaphore );
 }
-  //taskYIELD();
-  //vTaskDelay( 5/portTICK_PERIOD_MS );
-  xTaskNotifyWait(0,0,&ulInterruptStatus,1/portTICK_PERIOD_MS); // need to share the mcu but wake up quickly if a packet arrives or timeout occurs
+
+   // need to share the mcu but wake up quickly if a packet arrives or timeout occurs
+   // In theory we could sleep indefinitely and switch channels on timeout;
+   // the original loop() tries to set the channel about 15ms before the tx is expected. 
+   // slow loop times cause high packet loss. Yield() would give better packet loss results
+   // but the high priority task would rule the mcu. 
+  xTaskNotifyWait(0,0,&ulInterruptStatus,5);
 }}
 
 /* 
@@ -656,7 +666,7 @@ void SyncAddressISR(){
 // This is to grab the timestamp in case another 
 // sync address is seen before PayloadReady
 void FifoNotEmptyISR(){
-  radio.Fifo_Not_Empty = radio.SyncAddressSeen;
+  radio.Fifo_Not_Empty = micros();
 }
 
 // DIO 1 Timeout ISR
