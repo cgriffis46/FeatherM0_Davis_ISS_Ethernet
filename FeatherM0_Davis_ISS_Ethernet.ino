@@ -1,3 +1,5 @@
+#include <Adafruit_SleepyDog.h>
+
 #include <postParser.h>
 
 /*
@@ -68,6 +70,22 @@
 #include "RFM69registers.h"
 
 #include <Dns.h>
+
+#define DATASTRINGLENGTH 512
+#define MAXDATASTRINGS 16
+
+typedef struct DataString{
+  char TheString[DATASTRINGLENGTH];
+};
+
+
+typedef struct DatalogArray
+{
+  DataString DataStringArray[MAXDATASTRINGS];
+} ; 
+
+DatalogArray DataStrings;
+String DatalogString;
 
 // Wunderground interface 
 //#define USE_WUNDERGROUND_INFCE
@@ -168,7 +186,8 @@ DavisRFM69 radio(RFM69_CS, 3, true, 3);
 Station stations[1] = {
   { .id = 0,
     .type =  STYPE_VUE,
-    .active = true}
+    .active = true
+  }
 };
 
 
@@ -232,6 +251,8 @@ static void xReadRadioTask(void *pvParameters);
 TaskHandle_t xReadRadioTaskHandle;
 TaskHandle_t xinterrupttaskhandle;
 TaskHandle_t xUpdateWundergroundInfcetaskhandle;
+TaskHandle_t xWatchdogTaskHandle;
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
@@ -273,10 +294,15 @@ void setup() {
 
  // pinMode(10, INPUT_PULLUP); // Ethernet Feather CS pin
 
+  pinMode(4,OUTPUT);
+  digitalWrite(4,LOW);
+
   radio.setStations(stations, 1);
   radio.initialize(FREQ_BAND_US);
   radio.setBandwidth(RF69_DAVIS_BW_WIDE);
 
+
+  //xTaskCreate(xWatchdogTask,"Watchdog Task",256, NULL,tskIDLE_PRIORITY + 1,&xWatchdogTaskHandle);
 
   xTaskCreate(xReadRadioTask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 2,&xReadRadioTaskHandle);
   radio.xReadRadioTaskHandle=xReadRadioTaskHandle;
@@ -526,21 +552,25 @@ static void xReadRadioTask(void *pvParameters){
   long startTime,endTime;
   uint32_t ulInterruptStatus;
   bool PayloadReady = false;
+  bool Timeout = false;
 //vTaskSuspend(NULL);
+//radio.xWatchdogTaskHandle= xWatchdogTaskHandle;
 pinMode(5,INPUT_PULLUP);
 pinMode(12,INPUT_PULLUP);
 pinMode(11,INPUT_PULLUP);
+
 attachInterrupt(12,timeoutISR,RISING), // DIO1 RFM69 Timeout 
 attachInterrupt(5,SyncAddressISR,RISING); // DIO 3 Sync Address
 attachInterrupt(6,ModeReadyInterrupt,CHANGE); // DIO 5 ModeReady 
 attachInterrupt(11,FifoNotEmptyISR,RISING); // DIO 2 FifoNotEmpty 
-attachInterrupt(RFM69_INT, interruptHandler, RISING); // DIO0 PayloadReady
+attachInterrupt(RFM69_INT, interruptHandler, CHANGE); // DIO0 PayloadReady
 
 while(true){
 
 if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time over NTP
 //Serial.println("xRadio Task has Mutex");
 if((ulInterruptStatus&0x01)!=0x00){PayloadReady = true;} else {PayloadReady = false;}
+if((ulInterruptStatus&0x02)!=0x00){Timeout = true;} else {Timeout = false;}
  xTaskNotifyStateClear(NULL);
 // Check PayloadReady interrupt and clear the FIFO if needed 
   if(PayloadReady){ // PayloadReady task notification from ISR
@@ -558,6 +588,7 @@ if((ulInterruptStatus&0x01)!=0x00){PayloadReady = true;} else {PayloadReady = fa
 
       radio.unselect();  // Unselect RFM69 module, enabling interrupts
       //ulTaskNotifyValueClearIndexed(NULL,0,0x01); // Clear notification bit for PayloadReady interrupt
+      //xTaskNotify(xWatchdogTaskHandle,0x01,eSetBits);
       PayloadReady = false;
     }}
     // blink the LED if necessary
@@ -572,8 +603,7 @@ if((ulInterruptStatus&0x01)!=0x00){PayloadReady = true;} else {PayloadReady = fa
   }else{
     digitalWrite(LED, LOW);
   }
-
-  radio.loop();
+    radio.loop();
 
     if (radio.fifo.hasElements()) {
       decode_packet(radio.fifo.dequeue());
@@ -676,7 +706,7 @@ void timeoutISR(){
   BaseType_t xHigherPriorityTaskWoken;
   //uint32_t ulStatusRegister;
   xTaskNotifyFromISR(xReadRadioTaskHandle,0,eNoAction,&xHigherPriorityTaskWoken);
-//  Serial.println("Timeout");
+  Serial.println("Timeout");
 }
 // DIO0 PayloadReady ISR
 // Tells the main task data is available in the FIFO
@@ -686,7 +716,7 @@ void interruptHandler() {
   //    Serial.println("Interrupt");
 radio.PayloadReady = digitalRead(RFM69_INT);
    if(radio.PayloadReady){ 
-      radio.PayloadReadyTicks = micros();
+      radio.PayloadReadyTicks = xTaskGetTickCount();
       xTaskNotifyFromISR(xReadRadioTaskHandle,0x01,eSetBits,&pxHigherPriorityTaskWoken);}
 }
 
@@ -924,5 +954,49 @@ while(true){
   }
   vTaskDelay( 2000/portTICK_PERIOD_MS );
   //taskYIELD();
-}
-}
+}}
+
+static void xDataSamplerTask(void *pvParameters){
+int DataLogIndex = 0; 
+while(true){
+  DatalogString = "";
+  DatalogString += "temp:";
+  DatalogString += temperature;
+  DatalogString += "F,";
+  DatalogString += "rh:";
+  DatalogString += humidity;
+  DatalogString += 13;//cr
+  DatalogString += 10;//lf
+  DatalogString.toCharArray(&DataStrings.DataStringArray[DataLogIndex].TheString[0],DATASTRINGLENGTH);
+  Serial.print(DataStrings.DataStringArray[DataLogIndex].TheString);
+  DataLogIndex++;
+  if(DataLogIndex>=MAXDATASTRINGS) {DataLogIndex=0;}
+  vTaskDelay( 60000/portTICK_PERIOD_MS );
+}}
+
+static void xDataloggerTask(void *pvParameters){
+String DataPayload;
+while(true){
+// open the file
+// 
+
+}}
+
+static void xDisplayTask(void *pvParameters){
+while(true){
+
+}}
+
+/*
+
+static void xWatchdogTask(void *pvParameters){
+uint32_t ulNotifiedValue;
+int countdownMS = Watchdog.enable(6000000);
+Watchdog.reset();
+while(true){
+  xTaskNotifyWait(0x01,0xFF,&ulNotifiedValue,portMAX_DELAY);
+  Watchdog.reset();
+  Serial.println("Watchdog fed");
+}}
+
+*/

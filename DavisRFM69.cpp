@@ -72,7 +72,7 @@ volatile byte DavisRFM69::stationsFound = 0;
 volatile byte DavisRFM69::curStation = 0;
 volatile byte DavisRFM69::numStations = 0;
 volatile byte DavisRFM69::discChannel = 0;
-volatile uint32_t DavisRFM69::lastDiscStep;
+volatile TickType_t DavisRFM69::lastDiscStep;
 volatile uint32_t DavisRFM69::int_ticks = 0;
 volatile uint32_t rfm69_mode_counts[COUNT_RF69_MODES] = {};
 volatile uint32_t rfm69_mode_timer = 0;
@@ -175,7 +175,7 @@ void DavisRFM69::initialize(byte freqBand) {
 
   fifo.flush();
   initStations();
-  lastDiscStep = micros();
+  lastDiscStep = xTaskGetTickCount();
 
   //Timer1.initialize(2000L); // periodical interrupts every 2 ms for missed packet detection and other checks
   //Timer1.attachInterrupt(DavisRFM69::handleTimerInt, 0);
@@ -216,7 +216,7 @@ void DavisRFM69::setStations(Station *_stations, byte n) {
  * compute a 32bit time difference assuming the first argument
  * happend after the second. (ie accounting for wrap around).
  */
-uint32_t DavisRFM69::difftime(uint32_t after, uint32_t before) {
+uint32_t DavisRFM69::difftime(TickType_t after, TickType_t before) {
   if (after >= before) {
     return after - before;
   } else {
@@ -232,14 +232,18 @@ uint32_t DavisRFM69::difftime(uint32_t after, uint32_t before) {
  */
 void DavisRFM69::loop() {
   uint8_t i;
-
+  TickType_t xTicksToWait;
+  TimeOut_t xTimeOut;
   // first see if we have tuned into receive a station previously and failed to actually receive a packet
   if (mode == SM_RECEIVING) {
     // packet was lost
-//     if (difftime(micros(), stations[curStation].last_sync_word) > (1+stations[curStation].lostPackets)*stations[curStation].interval+(LATE_PACKET_THRESH + TUNEIN_USEC)){
-    if (difftime(micros(), stations[curStation].recvBegan) > (1+stations[curStation].lostPackets)*(LATE_PACKET_THRESH + TUNEIN_USEC)){
+    xTicksToWait = (LATE_PACKET_THRESH + TUNEIN_USEC)/portTICK_PERIOD_US;
+    if ( xTaskGetTickCount()>(stations[curStation].lastRx+stations[curStation].interval+LATE_PACKET_THRESH/portTICK_PERIOD_US)){
+    //if (difftime(micros(), stations[curStation].lastRx) > (1+stations[curStation].lostPackets)*stations[curStation].interval+(LATE_PACKET_THRESH + TUNEIN_USEC)){
+  //if (micros()>(LATE_PACKET_THRESH+stations[curStation].interval + stations[curStation].lastrx)){
+  //  if ((micros()>(stations[curStation].recvBegan+stations[curStation].interval))&((micros()-stations[curStation].recvBegan+stations[curStation].interval)>(LATE_PACKET_THRESH + TUNEIN_USEC))){
       //#ifdef DAVISRFM69_DEBUG
-      Serial.print(micros());
+      Serial.print(xTaskGetTickCount());
       Serial.print(": missed packet from station ");
       Serial.print(stations[curStation].id);
       Serial.print(" channel ");
@@ -248,15 +252,15 @@ void DavisRFM69::loop() {
       lostPackets++;
       stations[curStation].missedPackets++;
       stations[curStation].lostPackets++;
-      //stations[curStation].lastRx += stations[curStation].interval;
-      stations[curStation].lastRx = stations[curStation].last_sync_word + stations[curStation].interval*stations[curStation].lostPackets;
-      stations[curStation].channel = (byte)((difftime(micros(), stations[curStation].last_sync_word)/stations[curStation].interval+stations[curStation].last_channel+1)%getBandTabLength());
+      stations[curStation].lastRx += stations[curStation].interval;
+      //stations[curStation].lastRx = stations[curStation].last_sync_word + stations[curStation].interval*stations[curStation].lostPackets;
+      ///stations[curStation].channel = (byte)((difftime(micros(), stations[curStation].last_sync_word)/stations[curStation].interval+stations[curStation].last_channel+1)%getBandTabLength());
+      stations[curStation].channel = nextChannel(stations[curStation].channel);
       setChannel(stations[curStation].channel);
-      //stations[curStation].channel = nextChannel(stations[curStation].channel);
       // lost a station
       if (stations[curStation].lostPackets > RESYNC_THRESHOLD) {
         //#ifdef DAVISRFM69_DEBUG
-        Serial.print(micros());
+        Serial.print(xTaskGetTickCount());
         Serial.print(": station ");
         Serial.print(stations[curStation].id);
         Serial.println(" is lost.");
@@ -285,17 +289,18 @@ void DavisRFM69::loop() {
   for (i = 0; i < numStations; i++) {
     // interval is filled in once we discover a station
     if (stations[i].interval > 0) {
-      //if (difftime(stations[i].lastRx + stations[i].interval, micros()) < ( (1+stations[i].lostPackets)*TUNEIN_USEC)){
-      if (difftime(stations[i].last_sync_word + stations[i].interval*(1+stations[i].lostPackets), micros()) < ((1+stations[i].lostPackets)*TUNEIN_USEC)){
-//	  	if (difftime(stations[i].last_sync_word + stations[i].interval*(1+stations[i].lostPackets), micros()) < ((1+stations[i].lostPackets)*TUNEIN_USEC)){
+      //if(((stations[i].lastRx + stations[i].interval)>micros())&&((stations[i].last_sync_word + stations[i].interval*(1+stations[i].lostPackets)-TUNEIN_USEC)<micros())){
+      if (xTaskGetTickCount()>(stations[i].lastRx+stations[i].interval-TUNEIN_USEC/portTICK_PERIOD_US)){
 #ifdef DAVISRFM69_DEBUG
-        Serial.print(micros());
+        Serial.print(xTaskGetTickCount());
         Serial.print(": tune to station ");
         Serial.print(stations[i].id);
         Serial.print(" channel ");
         Serial.println(stations[i].channel);
 #endif
-      	stations[i].recvBegan = micros();
+      	stations[i].recvBegan = xTaskGetTickCount();
+        vTaskSetTimeOutState(&xTimeOut);
+        xTicksToWait = stations[i].interval;
         //stations[i].channel = (byte)((byte)(difftime(micros(), stations[i].last_sync_word)/stations[i].interval+stations[i].last_channel+1)%getBandTabLength());
         //Serial.print("Next Tx (sys): ");Serial.println(stations[i].channel);
 	  		setChannel(stations[i].channel);
@@ -328,11 +333,11 @@ void DavisRFM69::loop() {
         Serial.print(" channel ");
         Serial.println(stations[i].channel);
 #endif
-        stations[i].syncBegan = micros();
+        stations[i].syncBegan = xTaskGetTickCount();
         stations[i].progress = 0;
         //setChannel(stations[i].channel);
         setChannel(stations[i].channel);
-      } else if (difftime(micros(), stations[i].syncBegan) > DISCOVERY_STEP) {
+      } else if (xTaskGetTickCount()-stations[i].syncBegan > DISCOVERY_STEP/portTICK_PERIOD_US) {
         // we tried and failed to sync, try the next channel
 
         stations[i].channel = nextChannel(stations[i].channel);
@@ -343,13 +348,13 @@ void DavisRFM69::loop() {
         Serial.print(" channel ");
         Serial.println(stations[i].channel);
 #endif
-        stations[i].syncBegan = micros();
+        stations[i].syncBegan = xTaskGetTickCount();
         stations[i].progress = 0;
         setChannel(stations[i].channel);
       } else {
         // we're waiting to hear from this station, don't tune away!
 #ifdef DAVISRFM69_DEBUG
-        byte p = difftime(micros(), stations[i].syncBegan) / (DISCOVERY_STEP / 100);
+        byte p = difftime(xTaskGetTickCount(), stations[i].syncBegan) / (DISCOVERY_STEP / 100);
 
         if (stations[i].progress != p) {
           Serial.print(micros());
@@ -357,6 +362,7 @@ void DavisRFM69::loop() {
           Serial.print(p);
           Serial.println("\%");
           stations[i].progress = p;
+          //xTaskNotify(xWatchdogTaskHandle,0x01,eSetBits);// feed watchdog
         }
 #endif
         break;
@@ -442,7 +448,7 @@ void DavisRFM69::handleTimerInt() {
 // Handle received packets, called from RFM69 ISR
 void DavisRFM69::handleRadioInt() {
 
-  uint32_t lastRx = Fifo_Not_Empty > 0 ? Fifo_Not_Empty : micros();
+  TickType_t lastRx = PayloadReadyTicks > 0 ? PayloadReadyTicks: xTaskGetTickCount();
   uint16_t rxCrc = word(DATA[6], DATA[7]);              // received CRC
   uint16_t calcCrc = DavisRFM69::crc16_ccitt(DATA, 6);  // calculated CRC
 
@@ -479,7 +485,7 @@ void DavisRFM69::handleRadioInt() {
     }
 
     if (stationsFound < numStations && stations[stIx].interval == 0) { // interval will be 0 if we are not in sync with station 
-      stations[stIx].interval = (41 + id) * 1000000 / 16; // Davis' official tx interval in us
+      stations[stIx].interval = ((41 + id) * 1000 / 16)/portTICK_PERIOD_MS; // Davis' official tx interval in us
 
       stationsFound++;
 #ifdef DAVISRFM69_DEBUG
@@ -508,12 +514,16 @@ void DavisRFM69::handleRadioInt() {
   
     }
 
-    stations[stIx].earlyAmt = difftime(lastRx, stations[stIx].recvBegan);
+    //stations[stIx].earlyAmt = difftime(lastRx, stations[stIx].recvBegan);
+    stations[stIx].earlyAmt = lastRx-stations[stIx].recvBegan;
     stations[stIx].lostPackets = 0;
     stations[stIx].lastRx = stations[stIx].lastSeen = lastRx; // Last time a packet was received. 
     stations[stIx].last_channel = CHANNEL; // The last channel we saw a packet. Useful if we need to calculate the next channel after losing sync. 
     stations[stIx].channel = nextChannel(CHANNEL); // We just received a packet. Next channel should always be channel +1.
-    stations[stIx].last_sync_word = Fifo_Not_Empty; // Save a Timestamp of when the packet arrived. 
+    stations[stIx].last_sync_word = Fifo_Not_Empty; // Save a Timestamp of when the packet arrived.
+    Serial.println("set rtos timeout");
+    //vTaskSetTimeOutState(&stations[stIx].xTimeOut);
+    Serial.println("set rtos timeout 2");
 #ifdef DAVISRFM69_DEBUG
   Serial.print("Interval = ");
   Serial.println(stations[curStation].interval);
@@ -525,7 +535,8 @@ void DavisRFM69::handleRadioInt() {
     // standby the radio
     //setMode(RF69_MODE_RX);
     //setMode(RF69_MODE_STANDBY);
-    setChannel(stations[stIx].channel); 
+    setChannel(stations[stIx].channel);
+//    xTaskNotify(xWatchdogTaskHandle,0x01,eSetBits);// feed watchdog
   } else {
     // bad CRC, go back to RX on this channel
     setChannel(CHANNEL);  // this always has to be done somewhere right after reception, even for ignored/bogus packets
@@ -551,7 +562,7 @@ byte DavisRFM69::nextChannelByStation(int stIx) {
 // Find the station index in stations[] for station expected to tx the earliest and update curStation
 void DavisRFM69::nextStation() {
   uint32_t earliest = 0xffffffff;
-  uint32_t now = micros();
+  TickType_t now = xTaskGetTickCount();
   for (int i = 0; i < numStations; i++) {
     uint32_t current = stations[i].lastRx + stations[i].interval - now;
     if (stations[i].interval > 0 && current < earliest) {
@@ -726,8 +737,8 @@ void DavisRFM69::setMode(byte newMode) {
   if (newMode == _mode) return;
 
   if (_mode < COUNT_RF69_MODES) {
-    rfm69_mode_counts[_mode] += difftime(micros(), rfm69_mode_timer);
-    rfm69_mode_timer = micros();
+    rfm69_mode_counts[_mode] += difftime(xTaskGetTickCount(), rfm69_mode_timer);
+    rfm69_mode_timer = xTaskGetTickCount();
 #ifdef DAVISRFM69_DEBUG
     Serial.print(RFM69_MODE_STRINGS[_mode]);
     Serial.print(" -> ");
