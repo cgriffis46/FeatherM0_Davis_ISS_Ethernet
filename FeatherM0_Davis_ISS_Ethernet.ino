@@ -17,7 +17,7 @@
 
 #define USE_WUNDERGROUND_INFCE
 #define _USE_TH_SENSOR
-#define DAVISRFM69_DEBUG
+//#define DAVISRFM69_DEBUG
 #define _INFCE_SEND_TEMP_HUMIDITY
 #ifdef _USE_TH_SENSOR
 
@@ -706,7 +706,9 @@ void timeoutISR(){
   BaseType_t xHigherPriorityTaskWoken;
   //uint32_t ulStatusRegister;
   xTaskNotifyFromISR(xReadRadioTaskHandle,0,eNoAction,&xHigherPriorityTaskWoken);
-  Serial.println("Timeout");
+  #ifdef DAVISRFM69_DEBUG
+    Serial.println("Timeout");
+  #endif
 }
 // DIO0 PayloadReady ISR
 // Tells the main task data is available in the FIFO
@@ -956,8 +958,10 @@ while(true){
   //taskYIELD();
 }}
 
+QueueHandle_t DataStringQueue;
 static void xDataSamplerTask(void *pvParameters){
-int DataLogIndex = 0; 
+int DataLogIndex = 0;
+DataStringQueue = xQueueCreate(MAXDATASTRINGS,DATASTRINGLENGTH);
 while(true){
   DatalogString = "";
   DatalogString += "temp:";
@@ -968,18 +972,81 @@ while(true){
   DatalogString += 13;//cr
   DatalogString += 10;//lf
   DatalogString.toCharArray(&DataStrings.DataStringArray[DataLogIndex].TheString[0],DATASTRINGLENGTH);
+  xQueueSend(DataStringQueue,&DataStrings.DataStringArray[DataLogIndex].TheString[0],1000);
   Serial.print(DataStrings.DataStringArray[DataLogIndex].TheString);
   DataLogIndex++;
   if(DataLogIndex>=MAXDATASTRINGS) {DataLogIndex=0;}
   vTaskDelay( 60000/portTICK_PERIOD_MS );
 }}
 
+#define DL_PGM_STATE_INIT 0
+#define DL_PGM_STATE_READ_QUEUE 5
+#define DL_PGM_STATE_OPEN_FILE 10
+#define DL_PGM_STATE_OPEN_FOLDER 9
+#define DL_PGM_STATE_WRITE_FILE 15
+#define DL_PGM_STATE_IDLE 99
+#define DL_PGM_STATE_NO_SD_CARD 999
+
+char DataPayload[DATASTRINGLENGTH];
+File dataFile;
+
 static void xDataloggerTask(void *pvParameters){
-String DataPayload;
+byte DL_pgm_state = DL_PGM_STATE_INIT;
 while(true){
+if(xSemaphoreTake(SPIBusSemaphore,5)){
+  switch (DL_pgm_state){
+    case DL_PGM_STATE_INIT: 
+    {
+      DL_pgm_state = DL_PGM_STATE_READ_QUEUE;
+      break;
+    }
+    case DL_PGM_STATE_READ_QUEUE:{ 
+      if(DataStringQueue==NULL){ // No Queue 
+        DL_pgm_state = DL_PGM_STATE_IDLE;
+        break;
+      } else if(xQueueReceive(DataStringQueue,&DataPayload,1) == pdPASS){ // Item found in the queue
+        DL_pgm_state = DL_PGM_STATE_OPEN_FILE;
+      } else {
+        DL_pgm_state = DL_PGM_STATE_IDLE; // nothing in the queue 
+      }
+      break;
+    }
+    case DL_PGM_STATE_OPEN_FOLDER:{
+      break;
+    }
+    case DL_PGM_STATE_OPEN_FILE: { 
+      dataFile = SD.open("datalog.txt", FILE_WRITE); // Try opening the file 
+      if (dataFile){ // we opened the file 
+        DL_pgm_state = DL_PGM_STATE_WRITE_FILE;
+      } else{
+        DL_pgm_state = DL_PGM_STATE_INIT;
+      }
+      break;
+    }
+    case DL_PGM_STATE_WRITE_FILE:{
+    if (dataFile){
+      dataFile.println(dataString);
+      dataFile.close();
+    } else{
+
+    }
+      break;
+    }
+    case DL_PGM_STATE_NO_SD_CARD:{
+      break;
+    }
+    case default{
+      DL_pgm_state = DL_PGM_STATE_INIT;
+      break;
+    }
+  }
 // open the file
 // 
+} //  end try to get semaphore
+else { // could not obtain semaphore
 
+}
+  vTaskDelay( 30000/portTICK_PERIOD_MS );
 }}
 
 static void xDisplayTask(void *pvParameters){

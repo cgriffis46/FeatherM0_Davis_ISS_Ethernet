@@ -53,7 +53,7 @@
 
 extern SemaphoreHandle_t SPIBusSemaphore;
 
-#define DAVISRFM69_DEBUG
+//#define DAVISRFM69_DEBUG
 
 volatile byte DavisRFM69::DATA[DAVIS_PACKET_LEN];
 volatile byte DavisRFM69::_mode = RF69_MODE_INIT;  // current transceiver state
@@ -225,6 +225,8 @@ uint32_t DavisRFM69::difftime(TickType_t after, TickType_t before) {
   }
 }
 
+TimeOut_t xStationTimeOut[8];
+
 /**
  * Called by the main arduino loop, used when not using a timer (handleTimerInt)
  * this will check for lost packets and tune the radio to the proper channel
@@ -237,7 +239,8 @@ void DavisRFM69::loop() {
   // first see if we have tuned into receive a station previously and failed to actually receive a packet
   if (mode == SM_RECEIVING) {
     // packet was lost
-    xTicksToWait = (LATE_PACKET_THRESH + TUNEIN_USEC)/portTICK_PERIOD_US;
+    xTicksToWait = stations[curStation].interval+LATE_PACKET_THRESH/portTICK_PERIOD_US;
+    //if( xTaskCheckForTimeOut(&xStationTimeOut[curStation],&xTicksToWait)!= pdFALSE){
     if ( xTaskGetTickCount()>(stations[curStation].lastRx+stations[curStation].interval+LATE_PACKET_THRESH/portTICK_PERIOD_US)){
     //if (difftime(micros(), stations[curStation].lastRx) > (1+stations[curStation].lostPackets)*stations[curStation].interval+(LATE_PACKET_THRESH + TUNEIN_USEC)){
   //if (micros()>(LATE_PACKET_THRESH+stations[curStation].interval + stations[curStation].lastrx)){
@@ -253,6 +256,7 @@ void DavisRFM69::loop() {
       stations[curStation].missedPackets++;
       stations[curStation].lostPackets++;
       stations[curStation].lastRx += stations[curStation].interval;
+      //vTaskSetTimeOutState(&xStationTimeOut[curStation]);
       //stations[curStation].lastRx = stations[curStation].last_sync_word + stations[curStation].interval*stations[curStation].lostPackets;
       ///stations[curStation].channel = (byte)((difftime(micros(), stations[curStation].last_sync_word)/stations[curStation].interval+stations[curStation].last_channel+1)%getBandTabLength());
       stations[curStation].channel = nextChannel(stations[curStation].channel);
@@ -290,7 +294,7 @@ void DavisRFM69::loop() {
     // interval is filled in once we discover a station
     if (stations[i].interval > 0) {
       //if(((stations[i].lastRx + stations[i].interval)>micros())&&((stations[i].last_sync_word + stations[i].interval*(1+stations[i].lostPackets)-TUNEIN_USEC)<micros())){
-      if (xTaskGetTickCount()>(stations[i].lastRx+stations[i].interval-TUNEIN_USEC/portTICK_PERIOD_US)){
+      if (xTaskGetTickCount()>(stations[i].lastRx+stations[i].interval-50/portTICK_PERIOD_MS)){
 #ifdef DAVISRFM69_DEBUG
         Serial.print(xTaskGetTickCount());
         Serial.print(": tune to station ");
@@ -299,7 +303,7 @@ void DavisRFM69::loop() {
         Serial.println(stations[i].channel);
 #endif
       	stations[i].recvBegan = xTaskGetTickCount();
-        vTaskSetTimeOutState(&xTimeOut);
+//        vTaskSetTimeOutState(&xTimeOut);
         xTicksToWait = stations[i].interval;
         //stations[i].channel = (byte)((byte)(difftime(micros(), stations[i].last_sync_word)/stations[i].interval+stations[i].last_channel+1)%getBandTabLength());
         //Serial.print("Next Tx (sys): ");Serial.println(stations[i].channel);
@@ -334,6 +338,7 @@ void DavisRFM69::loop() {
         Serial.println(stations[i].channel);
 #endif
         stations[i].syncBegan = xTaskGetTickCount();
+ //       vTaskSetTimeOutState(&xStationTimeOut[i]);
         stations[i].progress = 0;
         //setChannel(stations[i].channel);
         setChannel(stations[i].channel);
@@ -522,7 +527,7 @@ void DavisRFM69::handleRadioInt() {
     stations[stIx].channel = nextChannel(CHANNEL); // We just received a packet. Next channel should always be channel +1.
     stations[stIx].last_sync_word = Fifo_Not_Empty; // Save a Timestamp of when the packet arrived.
     Serial.println("set rtos timeout");
-    //vTaskSetTimeOutState(&stations[stIx].xTimeOut);
+    vTaskSetTimeOutState(&xStationTimeOut[stIx]);
     Serial.println("set rtos timeout 2");
 #ifdef DAVISRFM69_DEBUG
   Serial.print("Interval = ");
