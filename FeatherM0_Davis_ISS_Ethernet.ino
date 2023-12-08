@@ -1,3 +1,5 @@
+#include <SD.h>
+
 #include <Adafruit_SleepyDog.h>
 
 #include <postParser.h>
@@ -12,9 +14,9 @@
 
 
 */
-//#define _USE_RTC_PCF8523 true 
 
 
+#define _USE_RTC_PCF8523 true 
 #define USE_WUNDERGROUND_INFCE
 #define _USE_TH_SENSOR
 //#define DAVISRFM69_DEBUG
@@ -71,8 +73,8 @@
 
 #include <Dns.h>
 
-#define DATASTRINGLENGTH 512
-#define MAXDATASTRINGS 16
+#define DATASTRINGLENGTH 256
+#define MAXDATASTRINGS 1
 
 typedef struct DataString{
   char TheString[DATASTRINGLENGTH];
@@ -81,7 +83,7 @@ typedef struct DataString{
 
 typedef struct DatalogArray
 {
-  DataString DataStringArray[MAXDATASTRINGS];
+  DataString DataStringArray[2];
 } ; 
 
 DatalogArray DataStrings;
@@ -208,7 +210,7 @@ Station stations[1] = {
   RTC_PCF8523 rtc; 
 #endif
 
-  #include <RTClib.h>
+//  #include <RTClib.h>
 
 // Enter a MAC address and IP address for your controller below.
 // The IP address will be dependent on your local network:
@@ -252,13 +254,19 @@ TaskHandle_t xReadRadioTaskHandle;
 TaskHandle_t xinterrupttaskhandle;
 TaskHandle_t xUpdateWundergroundInfcetaskhandle;
 TaskHandle_t xWatchdogTaskHandle;
+TaskHandle_t xDataSamplerTaskHandle;
+QueueHandle_t DataStringQueueHandle;
+TaskHandle_t xDataloggerTaskHandle;
+StaticQueue_t DataStringQueue;
+//uint8_t DataStringQueueArray[MAXDATASTRINGS];
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
   //while(!Serial);
  // SPI.begin(); // initialize SPI
-  pinMode(LED, OUTPUT); 
+  pinMode(LED, OUTPUT);
+  pinMode(9,INPUT_PULLUP);
   digitalWrite(LED, LOW);
   
   I2CBusSemaphore = xSemaphoreCreateMutex(); // Create I2C Semaphore
@@ -268,6 +276,17 @@ void setup() {
 
   pinMode(8, INPUT_PULLUP); // RF69 Enable pin
  // pinMode(10, INPUT_PULLUP); // Ethernet Feather CS pin
+#ifdef _USE_RTC
+// Initialize the RTC 
+    Serial.println("Initialize RTC");
+    if(rtc.begin(&Wire)){      
+//      rtc.start();
+      now = rtc.now();}
+  else {
+    Serial.println("Could not initialize RTC!");}
+#endif // USE_RTC
+
+
   // Initialize Ethernet 
   Ethernet.init(10);
   // start the Ethernet connection and the server:
@@ -306,8 +325,11 @@ void setup() {
 
   xTaskCreate(xReadRadioTask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 2,&xReadRadioTaskHandle);
   radio.xReadRadioTaskHandle=xReadRadioTaskHandle;
-  xTaskCreate(xNTPClientTask,     "NTP Task",       1024, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle); // Start NTP Update task
-  //xTaskCreate(xinterruptHandlertask,"Radio Task",256, NULL,tskIDLE_PRIORITY + 3,&xinterrupttaskhandle);
+  xTaskCreate(xNTPClientTask,     "NTP Task",       512, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle); // Start NTP Update task
+
+  DataStringQueueHandle = xQueueCreate(MAXDATASTRINGS,DATASTRINGLENGTH);
+  xTaskCreate(xDataSamplerTask,"Datasampler",256, NULL,tskIDLE_PRIORITY + 1,&xDataSamplerTaskHandle);
+  xTaskCreate(xDataloggerTask,"Datalogger",256, NULL,tskIDLE_PRIORITY + 1,&xDataloggerTaskHandle);
   xTaskCreate(xUpdateWundergroundInfce,"Wunderground Interface Task",1024, NULL,tskIDLE_PRIORITY + 1,&xUpdateWundergroundInfcetaskhandle);
   Serial.println("Boot complete!");
 
@@ -649,8 +671,6 @@ if(xSemaphoreTake(SPIBusSemaphore,1)){// we need SPI bus semaphore to update tim
             //Serial.println("Updated RTC time!");
             now = DateTime(timeClient.getEpochTime());
             //String timedate = String(now.year())+String("-")+String(now.month())+String("-")+String(now.day())+String(" ")+String(now.hour())+String(":")+String(now.minute())+String(":")+String(now.second());
-            Serial.println(now.timestamp());
-            Serial.flush();
             }
       }
       else {
@@ -667,12 +687,15 @@ if(xSemaphoreTake(SPIBusSemaphore,1)){// we need SPI bus semaphore to update tim
 if(shouldUpdateRTC){ 
   if(xSemaphoreTake(I2CBusSemaphore,5)){
   rtc.adjust(DateTime(timeClient.getEpochTime()));
+  now=rtc.now();
   xSemaphoreGive( I2CBusSemaphore );}
 } else {}
 #endif
+Serial.println(now.timestamp());
+Serial.flush();
 taskEnd = millis()-taskStart;
 //Serial.print("NTP task: "); Serial.println(taskEnd);
-// Slee
+// Sleep
 if(shouldUpdateRTC){ // If the time was updated, sleep for 10 minutes 
     vTaskDelay( 600000/portTICK_PERIOD_MS );
 } else { // If the time could not be updated, sleep for just 2 minutes.
@@ -958,25 +981,30 @@ while(true){
   //taskYIELD();
 }}
 
-QueueHandle_t DataStringQueue;
+
+
 static void xDataSamplerTask(void *pvParameters){
 int DataLogIndex = 0;
-DataStringQueue = xQueueCreate(MAXDATASTRINGS,DATASTRINGLENGTH);
+vTaskDelay( 60000/portTICK_PERIOD_MS );
 while(true){
+  if(xSemaphoreTake(I2CBusSemaphore,5)){
+    now=rtc.now();
+  xSemaphoreGive( I2CBusSemaphore );}
   DatalogString = "";
+  DatalogString += "time:"+now.timestamp()+",";
   DatalogString += "temp:";
-  DatalogString += temperature;
+  DatalogString += String(temperature);
   DatalogString += "F,";
   DatalogString += "rh:";
-  DatalogString += humidity;
-  DatalogString += 13;//cr
-  DatalogString += 10;//lf
+  DatalogString += String(humidity);
+//  DatalogString += 13;//cr
+//  DatalogString += 10;//lf
   DatalogString.toCharArray(&DataStrings.DataStringArray[DataLogIndex].TheString[0],DATASTRINGLENGTH);
-  xQueueSend(DataStringQueue,&DataStrings.DataStringArray[DataLogIndex].TheString[0],1000);
+  xQueueSend(DataStringQueueHandle,&DataStrings.DataStringArray[DataLogIndex].TheString[0],1000);
   Serial.print(DataStrings.DataStringArray[DataLogIndex].TheString);
   DataLogIndex++;
   if(DataLogIndex>=MAXDATASTRINGS) {DataLogIndex=0;}
-  vTaskDelay( 60000/portTICK_PERIOD_MS );
+  vTaskDelay( 30000/portTICK_PERIOD_MS );
 }}
 
 #define DL_PGM_STATE_INIT 0
@@ -992,21 +1020,31 @@ File dataFile;
 
 static void xDataloggerTask(void *pvParameters){
 byte DL_pgm_state = DL_PGM_STATE_INIT;
+vTaskDelay( 60000/portTICK_PERIOD_MS );
 while(true){
 if(xSemaphoreTake(SPIBusSemaphore,5)){
   switch (DL_pgm_state){
     case DL_PGM_STATE_INIT: 
     {
-      DL_pgm_state = DL_PGM_STATE_READ_QUEUE;
+      if(SD.begin(9)){
+        Serial.println("SD card found!");
+              DL_pgm_state = DL_PGM_STATE_READ_QUEUE;
+      } else {
+        Serial.println("No SD card found!");
+        DL_pgm_state = DL_PGM_STATE_NO_SD_CARD;
+      }
+
       break;
     }
     case DL_PGM_STATE_READ_QUEUE:{ 
-      if(DataStringQueue==NULL){ // No Queue 
+      if(DataStringQueueHandle==NULL){ // No Queue 
         DL_pgm_state = DL_PGM_STATE_IDLE;
         break;
-      } else if(xQueueReceive(DataStringQueue,&DataPayload,1) == pdPASS){ // Item found in the queue
+      } else if(xQueueReceive(DataStringQueueHandle,&DataPayload,1) == pdPASS){ // Item found in the queue
+        Serial.println("Item found in Queue!");
         DL_pgm_state = DL_PGM_STATE_OPEN_FILE;
       } else {
+        Serial.println("Item found in Queue!");
         DL_pgm_state = DL_PGM_STATE_IDLE; // nothing in the queue 
       }
       break;
@@ -1016,37 +1054,64 @@ if(xSemaphoreTake(SPIBusSemaphore,5)){
     }
     case DL_PGM_STATE_OPEN_FILE: { 
       dataFile = SD.open("datalog.txt", FILE_WRITE); // Try opening the file 
-      if (dataFile){ // we opened the file 
-        DL_pgm_state = DL_PGM_STATE_WRITE_FILE;
+      if (dataFile){ // we opened the file
+        dataFile.println(DataPayload);
+        dataFile.close();
+        
+        if(xQueuePeek(DataStringQueueHandle,&DataPayload,1)==pdTRUE){
+        DL_pgm_state = DL_PGM_STATE_READ_QUEUE;
       } else{
+        DL_pgm_state = DL_PGM_STATE_IDLE;}
+      } else{
+        Serial.println("Could not open file");
         DL_pgm_state = DL_PGM_STATE_INIT;
       }
       break;
     }
     case DL_PGM_STATE_WRITE_FILE:{
     if (dataFile){
-      dataFile.println(dataString);
+      dataFile.println(DataPayload);
       dataFile.close();
+      if(xQueuePeek(DataStringQueueHandle,&DataPayload,1)==pdTRUE){
+        DL_pgm_state = DL_PGM_STATE_READ_QUEUE;
+      } else{
+        DL_pgm_state = DL_PGM_STATE_IDLE;
+      }
+      
     } else{
-
+      DL_pgm_state = DL_PGM_STATE_INIT;
     }
       break;
     }
     case DL_PGM_STATE_NO_SD_CARD:{
+      Serial.println("No SD card! could not init datalogger. ");
+      DL_pgm_state = DL_PGM_STATE_INIT;
       break;
     }
-    case default{
+    case DL_PGM_STATE_IDLE:{
+      if(xQueuePeek(DataStringQueueHandle,&DataPayload,1)==pdTRUE){
+        DL_pgm_state = DL_PGM_STATE_READ_QUEUE;
+      } else{
+        DL_pgm_state = DL_PGM_STATE_IDLE;
+      }
+      break;
+    }
+    default:{
       DL_pgm_state = DL_PGM_STATE_INIT;
       break;
     }
   }
 // open the file
-// 
+//
+    xSemaphoreGive( SPIBusSemaphore );
 } //  end try to get semaphore
 else { // could not obtain semaphore
 
 }
-  vTaskDelay( 30000/portTICK_PERIOD_MS );
+  if(DL_PGM_STATE_IDLE){
+  vTaskDelay( 10000/portTICK_PERIOD_MS );} else {
+    vTaskDelay( 1000/portTICK_PERIOD_MS );
+  }
 }}
 
 static void xDisplayTask(void *pvParameters){

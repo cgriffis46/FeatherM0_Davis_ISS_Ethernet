@@ -225,7 +225,7 @@ uint32_t DavisRFM69::difftime(TickType_t after, TickType_t before) {
   }
 }
 
-TimeOut_t xStationTimeOut[8];
+//TimeOut_t xStationTimeOut[8];
 
 /**
  * Called by the main arduino loop, used when not using a timer (handleTimerInt)
@@ -526,9 +526,9 @@ void DavisRFM69::handleRadioInt() {
     stations[stIx].last_channel = CHANNEL; // The last channel we saw a packet. Useful if we need to calculate the next channel after losing sync. 
     stations[stIx].channel = nextChannel(CHANNEL); // We just received a packet. Next channel should always be channel +1.
     stations[stIx].last_sync_word = Fifo_Not_Empty; // Save a Timestamp of when the packet arrived.
-    Serial.println("set rtos timeout");
-    vTaskSetTimeOutState(&xStationTimeOut[stIx]);
-    Serial.println("set rtos timeout 2");
+    //Serial.println("set rtos timeout");
+    //vTaskSetTimeOutState(&xStationTimeOut[stIx]);
+    //Serial.println("set rtos timeout 2");
 #ifdef DAVISRFM69_DEBUG
   Serial.print("Interval = ");
   Serial.println(stations[curStation].interval);
