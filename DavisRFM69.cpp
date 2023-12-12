@@ -241,7 +241,7 @@ void DavisRFM69::loop() {
     // packet was lost
     xTicksToWait = stations[curStation].interval+LATE_PACKET_THRESH/portTICK_PERIOD_US;
     //if( xTaskCheckForTimeOut(&xStationTimeOut[curStation],&xTicksToWait)!= pdFALSE){
-    if ( xTaskGetTickCount()>(stations[curStation].lastRx+stations[curStation].interval+LATE_PACKET_THRESH/portTICK_PERIOD_US)){
+    if ( xTaskGetTickCount()>(stations[curStation].lastRx+stations[curStation].interval+LATE_PACKET_THRESH/portTICK_PERIOD_US+50/portTICK_PERIOD_MS)){
     //if (difftime(micros(), stations[curStation].lastRx) > (1+stations[curStation].lostPackets)*stations[curStation].interval+(LATE_PACKET_THRESH + TUNEIN_USEC)){
   //if (micros()>(LATE_PACKET_THRESH+stations[curStation].interval + stations[curStation].lastrx)){
   //  if ((micros()>(stations[curStation].recvBegan+stations[curStation].interval))&((micros()-stations[curStation].recvBegan+stations[curStation].interval)>(LATE_PACKET_THRESH + TUNEIN_USEC))){

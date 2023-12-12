@@ -1001,7 +1001,7 @@ while(true){
 //  DatalogString += 10;//lf
   DatalogString.toCharArray(&DataStrings.DataStringArray[DataLogIndex].TheString[0],DATASTRINGLENGTH);
   xQueueSend(DataStringQueueHandle,&DataStrings.DataStringArray[DataLogIndex].TheString[0],1000);
-  Serial.print(DataStrings.DataStringArray[DataLogIndex].TheString);
+  Serial.println(DataStrings.DataStringArray[DataLogIndex].TheString);
   DataLogIndex++;
   if(DataLogIndex>=MAXDATASTRINGS) {DataLogIndex=0;}
   vTaskDelay( 30000/portTICK_PERIOD_MS );
@@ -1044,7 +1044,6 @@ if(xSemaphoreTake(SPIBusSemaphore,5)){
         Serial.println("Item found in Queue!");
         DL_pgm_state = DL_PGM_STATE_OPEN_FILE;
       } else {
-        Serial.println("Item found in Queue!");
         DL_pgm_state = DL_PGM_STATE_IDLE; // nothing in the queue 
       }
       break;
@@ -1059,13 +1058,12 @@ if(xSemaphoreTake(SPIBusSemaphore,5)){
         dataFile.close();
         
         if(xQueuePeek(DataStringQueueHandle,&DataPayload,1)==pdTRUE){
-        DL_pgm_state = DL_PGM_STATE_READ_QUEUE;
+          DL_pgm_state = DL_PGM_STATE_READ_QUEUE;
+        } else{
+          DL_pgm_state = DL_PGM_STATE_IDLE;}
       } else{
-        DL_pgm_state = DL_PGM_STATE_IDLE;}
-      } else{
-        Serial.println("Could not open file");
-        DL_pgm_state = DL_PGM_STATE_INIT;
-      }
+          Serial.println("Could not open file");
+          DL_pgm_state = DL_PGM_STATE_INIT;}
       break;
     }
     case DL_PGM_STATE_WRITE_FILE:{
