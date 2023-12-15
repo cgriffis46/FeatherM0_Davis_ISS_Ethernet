@@ -1,3 +1,9 @@
+#include <Adafruit_GFX.h>
+#include <Adafruit_GrayOLED.h>
+#include <Adafruit_SPITFT.h>
+#include <Adafruit_SPITFT_Macros.h>
+#include <gfxfont.h>
+
 #include <SD.h>
 
 #include <Adafruit_SleepyDog.h>
@@ -177,6 +183,7 @@ static void xUpdateWundergroundInfce(void *pvParameters); // Must be called in m
 #define SERIAL_BAUD 19200
 
 // If using Feather M0 with RF69 module 
+//  #define RFM69_ENABLE 9
   #define RFM69_CS    8
   #define RFM69_INT   3
   #define RFM69_RST   4
@@ -265,10 +272,13 @@ void setup() {
   delay(1000);
   //while(!Serial);
  // SPI.begin(); // initialize SPI
-  pinMode(LED, OUTPUT);
-  pinMode(9,INPUT_PULLUP);
   digitalWrite(LED, LOW);
-  
+  pinMode(LED, OUTPUT);
+  digitalWrite(RFM69_RST, LOW);
+  pinMode(RFM69_RST,OUTPUT);
+  delay(10);
+  pinMode(RFM69_RST,INPUT_PULLUP);
+  delay(10);
   I2CBusSemaphore = xSemaphoreCreateMutex(); // Create I2C Semaphore
   //Eth0Semaphore = xSemaphoreCreateMutex(); // Create ETH0 Semaphore
   SPIBusSemaphore = xSemaphoreCreateMutex();
@@ -1112,9 +1122,16 @@ else { // could not obtain semaphore
   }
 }}
 
+
 static void xDisplayTask(void *pvParameters){
 while(true){
+  if(xSemaphoreTake(I2CBusSemaphore,5)){
+  rtc.adjust(DateTime(timeClient.getEpochTime()));
+  now=rtc.now();
 
+
+
+  xSemaphoreGive( I2CBusSemaphore );}
 }}
 
 /*
