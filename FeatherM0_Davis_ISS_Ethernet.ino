@@ -157,8 +157,8 @@ enum {
   int WundergroundResponseCode;
   String WUurl = "https://weatherstation.wunderground.com/weatherstation/updateweatherstation.php?";
   String WUget = "/weatherstation/updateweatherstation.php?"; 
-  String WU_station_id = "KMAATTLE33"; //Wunderground station ID
-  String WU_station_pwd = "JWM4JYWE"; //# Wunderground station password
+  String WU_station_id = ""; //Wunderground station ID
+  String WU_station_pwd = ""; //# Wunderground station password
   String WUcreds;  // = "ID=" + WU_station_id + "&PASSWORD="+ WU_station_pwd;
   const char *url = "weatherstation.wunderground.com";
   String action_str = "&action=updateraw";
