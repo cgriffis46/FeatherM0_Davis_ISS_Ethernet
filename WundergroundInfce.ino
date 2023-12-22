@@ -12,8 +12,11 @@
 #include <Ethernet.h>
 char buffer[256];
 static byte PgmState = SM_Wunderground_Infce_Init;
+TickType_t HTTP_Timeout; 
+
 static void xUpdateWundergroundInfce(void *pvParameters){
 vTaskDelay( 60000/portTICK_PERIOD_MS );
+HTTP_Timeout = xTaskGetTickCount();
 while (true){
 if(xSemaphoreTake(SPIBusSemaphore,1)){// we need eth0 semaphore to update time over NTP
 //Serial.print("wunderground task ");Serial.println(PgmState);
@@ -56,7 +59,7 @@ switch (PgmState) {
       WundergroundEthernetCclient.println("Connection: close");
       WundergroundEthernetCclient.println();
     }
-
+    HTTP_Timeout = xTaskGetTickCount();
     PgmState = SM_Wunderground_Infce_WaitForHTTP_Response;
     break;
   }
@@ -71,6 +74,8 @@ switch (PgmState) {
       #ifdef _DEBUG_WU_INFCE
         Serial.write(buf, len); // show in the serial monitor (slows some boards)
       #endif
+    } else if (xTaskGetTickCount()-HTTP_Timeout>5000) { // Timeout after 5 seconds
+      PgmState = SM_Wunderground_CloseConnections;
     }
 
     break;
