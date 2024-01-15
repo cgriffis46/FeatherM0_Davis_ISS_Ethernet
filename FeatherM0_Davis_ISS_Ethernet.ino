@@ -8,7 +8,7 @@
 
 #include <Adafruit_SleepyDog.h>
 
-#include <postParser.h>
+//#include <postParser.h>
 
 /*
   (c) 2023.10.26 by Cory Griffis
@@ -756,16 +756,17 @@ static void xHTTPUpdateTask(void* pvParameters) {
         // an HTTP request ends with a blank line
         bool currentLineIsBlank = true;
         if (HTTPClient.connected()) {
-          PostParser postParser = PostParser(HTTPClient);  // create our parser
+ //         PostParser postParser = PostParser(HTTPClient);  // create our parser
           while (HTTPClient.available()) {
             char c = HTTPClient.read();
-            postParser.addHeaderCharacter(c);  // compose the header
+ //           postParser.addHeaderCharacter(c);  // compose the header
             Serial.write(c);
             // if you've gotten to the end of the line (received a newline
             // character) and the line is blank, the HTTP request has ended,
             // so you can send a reply
             if (c == '\n' && currentLineIsBlank) {
 
+/*
               postParser.grabPayload();
               postParser.getField("i").toCharArray(PostActionBuf, sizeof(PostActionBuf));
               Serial.println(PostActionBuf);
@@ -775,7 +776,7 @@ static void xHTTPUpdateTask(void* pvParameters) {
               Serial.println(postParser.getHeader());   // print the header for debugging
               delay(10);                                //used to make sure the 2 serial prints don't overlap each other
               Serial.println(postParser.getPayload());  // print the payload for debugging
-
+*/
 
               // send a standard HTTP response header
               HTTPClient.println("HTTP/1.1 200 OK");
@@ -1072,9 +1073,10 @@ static void xDataloggerTask(void* pvParameters) {
   }
 }
 
-#define UP_BUTTON_PIN 5
-#define DOWN_BUTTON_PIN 6
-#define ENTER_BUTTON_PIN 7
+enum xDisplayAction{
+  DISPLAY_SET,
+  DISPLAY_UPDATE
+};
 
 enum xButtonState {
   BUTTON_UP,
@@ -1102,7 +1104,6 @@ public:
   QueueHandle_t eventQueue;
 private:
   static void isr(void);
-
 };
 
 xButton::xButton(uint8_t Pin) {
@@ -1125,16 +1126,18 @@ class xButtonEvent{
   xButton *Button;
   xButtonEventType EventType;
 };
+
 xButtonEvent::xButtonEvent(xButton* _Button,xButtonEventType _EventType){
   Button = _Button;
   EventType = _EventType;
 }
 
 QueueHandle_t ButtonEventQueue;
+QueueHandle_t DisplayQueue;
 
 #define UP_PIN 11
 #define DOWN_PIN 5
-#define ENTER_PIN 13
+#define ENTER_PIN 6
 #define DEBOUNCE_MILLIS 250
 
 xButton up(UP_PIN);
@@ -1200,7 +1203,7 @@ void xEnter(){
       xButtonEvent ButtonPress(&enter,BUTTON_PRESSED);
       xQueueSend(enter.eventQueue,&ButtonPress, 1000);
     }
-  } else { // button was released 
+  } else if ((enter.OldButtonState == BUTTON_DOWN)&(enter.ButtonState==BUTTON_UP)){ // button was released 
   if(millis()-enter.buttonUpTime>DEBOUNCE_MILLIS){// last button release was past the Debounce time
       xButtonEvent ButtonRelease(&enter,BUTTON_RELEASED);
       xQueueSend(enter.eventQueue,&ButtonRelease, 1000);
@@ -1278,6 +1281,7 @@ enum xMenuFunction_T {
   Function,  // Menu Action is a Function
   Menu       // Menu Action loads another Menu
 };
+
 class xMenuItem {
   xMenuFunction_T MenuFunctionType;  // Determine if Menu Item is a Function or a sub-menu
   void (*function_ptr)(void);        // Function pointer for a Menu Action
@@ -1292,30 +1296,44 @@ class xDisplayItem {
   virtual void display();
 };
 
-// xMenu will be a subclass of xDisplayItem
-// When we render the menu we can call display()
-class xMenu : xDisplayItem {
-  byte numButtons;
-  byte sel;
-  byte DisplayLines;
-  xMenuItem MenuItems[8];
-  void display();
-  friend class xMenuItem;
-};
-
-void xMenu::display(){
-
-}
+void xDisplayItem::display(){}
 
 class xDisplay {
-  virtual void updateDisplay();
   xDisplayItem DisplayItems[6];
   public:
     bool AddDisplayItem(xDisplayItem *displayItem);
+    virtual void init();
+    virtual void update();
+    TickType_t LastUpdate;
+    TickType_t RefreshTimer = 1000;
 };
 
-void renderMenu() {
-}
+class xDisplayEvent{
+  public:
+  xDisplayAction DisplayAction;
+  xDisplay *Display;
+};
+
+void xDisplay::init(){}
+
+void xDisplay::update(){}
+
+// xMenu will be a subclass of xDisplayItem
+// When we render the menu we can call display()
+class xMenu : public xDisplayItem {
+  byte numButtons;
+  byte sel; // menu item selected
+  byte DisplayLines; // max # lines to display for the menu
+  byte FirstLine; // first menu item we should display
+  byte EndLine; // last menu item we should display
+  xMenuItem MenuItems[8]; // list of menu items to display
+  void display(); // display the menu
+  friend class xMenuItem;
+};
+
+void xMenu::display(){}
+
+void renderMenu(){}
 
 /*
 
@@ -1338,29 +1356,65 @@ while(true){
 
 Adafruit_FeatherOLED oled = Adafruit_FeatherOLED();
 
+class xDefaultDisplay:public xDisplay{
+  void init();
+  void update();
+};
+
+void xDefaultDisplay::init(){
+  up.button_press_handler=xUpPress;
+  up.button_release_handler=xUpRelease;
+  down.button_press_handler=xDownPress;
+  down.button_release_handler=xDownRelease;
+  enter.button_press_handler=xEnterPress;
+  enter.button_release_handler=xEnterRelease;
+}
+
+void xDefaultDisplay::update(){
+      oled.clearDisplay();
+      oled.setCursor(0, 0);
+      oled.print("Temp: ");
+      oled.print(temperature);
+      oled.println();
+      oled.print("Humidity: ");
+      oled.print(humidity);
+      oled.println("%");
+      oled.display();
+}
+
+xDisplay *TheDisplay;
+xDisplayEvent DisplayEvent;
+xDefaultDisplay _DefaultDisplay;
+
 static void xDisplayTask(void* pvParameters) {
+  DisplayQueue = xQueueCreate(2,sizeof(xDisplayEvent));
+  TheDisplay = &_DefaultDisplay;
   vTaskDelay(30000 / portTICK_PERIOD_MS);
+  DisplayEvent.DisplayAction=DISPLAY_SET;
+  DisplayEvent.Display=&_DefaultDisplay;
+  xQueueSend(DisplayQueue,&DisplayEvent, 1000);
   oled.init();
   while (true) {
     //try to get time from RTC
     if (xSemaphoreTake(I2CBusSemaphore, 5)) {
       now = rtc.now();
-
-      oled.clearDisplay();
-      oled.setCursor(0, 0);
-      oled.print("Temp: ");
-      oled.print(temperature);
-
-      oled.println();
-
-      oled.print("Humidity: ");
-      oled.print(humidity);
-      oled.println("%");
-      oled.display();
-
+      if(xQueueReceive(DisplayQueue, &DisplayEvent, 5000)==pdTRUE){
+        if(DisplayEvent.DisplayAction==DISPLAY_SET){
+          TheDisplay=DisplayEvent.Display;
+          TheDisplay->init();
+          TheDisplay->update();
+          TheDisplay->LastUpdate = xTaskGetTickCount();
+        }
+        else if(DisplayEvent.DisplayAction==DISPLAY_UPDATE) {
+          TheDisplay->update();
+          TheDisplay->LastUpdate = xTaskGetTickCount();
+        }
+      }
+      else if(xTaskGetTickCount()>(TheDisplay->LastUpdate+TheDisplay->RefreshTimer)) {
+          TheDisplay->update();
+          TheDisplay->LastUpdate = xTaskGetTickCount();
+      }
       xSemaphoreGive(I2CBusSemaphore);
     }
-
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
   }
 }
