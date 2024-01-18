@@ -1,3 +1,4 @@
+
 #include <Adafruit_GFX.h>
 #include <Adafruit_GrayOLED.h>
 #include <Adafruit_SPITFT.h>
@@ -7,6 +8,13 @@
 #include <SD.h>
 
 #include <Adafruit_SleepyDog.h>
+
+#define USE_FEATHER_OLED true
+
+#include <Adafruit_FeatherOLED.h>
+#include <Adafruit_SSD1306.h>
+
+Adafruit_FeatherOLED oled = Adafruit_FeatherOLED();
 
 //#include <postParser.h>
 
@@ -296,6 +304,8 @@ void setup() {
   }
 #endif  // USE_RTC
 
+    oled.init();
+
   // Initialize Ethernet
   Ethernet.init(10);
   // start the Ethernet connection and the server:
@@ -330,7 +340,7 @@ void setup() {
   radio.initialize(FREQ_BAND_US);
   radio.setBandwidth(RF69_DAVIS_BW_WIDE);
 
-  xTaskCreate(xReadRadioTask, "Radio Task", 256, NULL, tskIDLE_PRIORITY + 2, &xReadRadioTaskHandle);
+  xTaskCreate(xReadRadioTask, "Radio Task", 256, NULL, tskIDLE_PRIORITY + 3, &xReadRadioTaskHandle);
   radio.xReadRadioTaskHandle = xReadRadioTaskHandle;
   xTaskCreate(xNTPClientTask, "NTP Task", 512, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle);  // Start NTP Update task
 
@@ -676,7 +686,7 @@ static void xNTPClientTask(void* pvParameters) {
 // NTP may only return true once per minute. Update the RTC only if necessary.
 #ifdef _USE_RTC
     if (shouldUpdateRTC) {
-      if (xSemaphoreTake(I2CBusSemaphore, 5)) {
+      if (xSemaphoreTake(I2CBusSemaphore, 5000)) {
         rtc.adjust(DateTime(timeClient.getEpochTime()));
         now = rtc.now();
         xSemaphoreGive(I2CBusSemaphore);
@@ -1216,29 +1226,6 @@ void xEnter(){
     enter.OldButtonState = enter.ButtonState;
 }
 
-void xUpPress(){
-  Serial.println("Up Pressed");
-}
-
-void xUpRelease(){
-  Serial.println("Up Released");
-}
-
-void xDownPress(){
-  Serial.println("Down Pressed");
-}
-
-void xDownRelease(){
-  Serial.println("Down Released");
-}
-void xEnterPress(){
-  Serial.println("Enter Pressed");
-}
-
-void xEnterRelease(){
-  Serial.println("Enter");
-}
-
 xButtonEvent ButtonEvent(&enter,BUTTON_PRESSED);
 
 static void xButtonHandlerTask(void* pvParameters) {
@@ -1259,7 +1246,7 @@ static void xButtonHandlerTask(void* pvParameters) {
   enter.button_release_handler=xEnterRelease;
 
   while (true) {
-    if(xQueueReceive(ButtonEventQueue, &ButtonEvent, 1000) == pdTRUE){
+    if(xQueueReceive(ButtonEventQueue, &ButtonEvent, 5000) == pdTRUE){
       if(ButtonEvent.EventType==BUTTON_PRESSED){
         if(!ButtonEvent.Button->button_press_handler==NULL){
           ButtonEvent.Button->button_press_handler();
@@ -1282,58 +1269,131 @@ enum xMenuFunction_T {
   Menu       // Menu Action loads another Menu
 };
 
-class xMenuItem {
+typedef struct xMenuItem {
   xMenuFunction_T MenuFunctionType;  // Determine if Menu Item is a Function or a sub-menu
   void (*function_ptr)(void);        // Function pointer for a Menu Action
-  char text[32];                     // menu item
-  xMenuItem(const char t[32], void (*ptr)(void)) {
-    function_ptr = ptr;
-  }
-  friend class xMenu;
+  String text;                   // menu item
+//  xMenuItem(const char t[32], void (*ptr)(void)) {
+//    function_ptr = ptr;
+//  }
+//  friend class xMenu;
 };
 
 class xDisplayItem {
+  public:
+  virtual void init();
   virtual void display();
+  virtual bool isMenu(){return false;}
 };
 
 void xDisplayItem::display(){}
+void xDisplayItem::init(){}
+
+#define MAXMENUITEMS 8
+
+// xMenu will be a subclass of xDisplayItem
+// When we render the menu we can call display()
+class xMenu : public xDisplayItem {
+  int numButtons;
+  int sel = 0; // menu item selected
+  int DisplayLines = 4; // max # lines to display for the menu
+  int FirstLine = 0; // first menu item we should display
+  int EndLine = 4; // last menu item we should display
+  xMenuItem MenuItems[8]; // list of menu items to display
+  int items = 0;
+  public:
+    void init();
+    void AddMenuItemSubmenu(String _text, xMenu *_SubMenu);
+    void AddMenuItemFunction(String _text, void (*ptr)(void));
+    void display(); // display the menu
+    virtual void xMenuUp();
+    virtual void xMenuDown();
+    virtual void xMenuEnter();
+    bool isMenu(){return true;}
+    friend class xMenuItem;
+};
+
+void xMenu::init(){
+  items = 0;
+  FirstLine = 0;
+  EndLine = 4;
+}
+void xMenu::display(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  for(int i=FirstLine; i<items; i++){
+    if(i==sel){oled.print("*");} else {oled.print(" ");} // show * if menu line is selected
+    oled.println(MenuItems[i].text); // Print the menu item to OLED
+  }
+  oled.display();
+  //Serial.println("update menu display");
+}
+
+//void xMenu::renderMenu(){}
+
+void xMenu::xMenuUp(){
+  if(sel-1<0){sel = 0;}
+    else sel--;
+  if(sel<FirstLine) {FirstLine=sel;EndLine=FirstLine+DisplayLines-1;}
+}
+void xMenu::xMenuDown(){
+  Serial.println(sel);
+  Serial.println(FirstLine);
+
+    if(sel+1<items){
+      sel++;
+      if(sel>=EndLine){
+        FirstLine++;
+      }
+    }
+}
+
+void xMenu::xMenuEnter(){
+  if(MenuItems[sel].MenuFunctionType==Function){
+    MenuItems[sel].function_ptr();
+  }
+  else if (MenuItems[sel].MenuFunctionType==Menu){
+  }
+}
+
+void xMenu::AddMenuItemFunction(String _text,void (*ptr)(void)){
+  Serial.print("Menu Function: ");Serial.println(_text);
+  if((items<MAXMENUITEMS)){
+    MenuItems[items].text=_text;
+    MenuItems[items].function_ptr=ptr;
+    items++;
+    if(items>EndLine){EndLine = DisplayLines;} else {EndLine = items;}
+  }
+}
+
+void xMenu::AddMenuItemSubmenu(String _text, xMenu *_SubMenu){}
 
 class xDisplay {
-  xDisplayItem DisplayItems[6];
+  xDisplayItem *DisplayItems[6];
   public:
+    xMenu *TheMenu;
     bool AddDisplayItem(xDisplayItem *displayItem);
+    void setMenu(xMenu *_Menu);
     virtual void init();
     virtual void update();
     TickType_t LastUpdate;
-    TickType_t RefreshTimer = 1000;
+    TickType_t RefreshTimer = 5000;
+    TickType_t DisplayTimeout = 0;
 };
+
+void xDisplay::setMenu(xMenu *_Menu){
+  TheMenu = _Menu;
+}
 
 class xDisplayEvent{
   public:
-  xDisplayAction DisplayAction;
-  xDisplay *Display;
+    xDisplayAction DisplayAction;
+    xDisplay *Display;
 };
 
 void xDisplay::init(){}
 
 void xDisplay::update(){}
-
-// xMenu will be a subclass of xDisplayItem
-// When we render the menu we can call display()
-class xMenu : public xDisplayItem {
-  byte numButtons;
-  byte sel; // menu item selected
-  byte DisplayLines; // max # lines to display for the menu
-  byte FirstLine; // first menu item we should display
-  byte EndLine; // last menu item we should display
-  xMenuItem MenuItems[8]; // list of menu items to display
-  void display(); // display the menu
-  friend class xMenuItem;
-};
-
-void xMenu::display(){}
-
-void renderMenu(){}
 
 /*
 
@@ -1348,13 +1408,6 @@ while(true){
 }}
 
 */
-
-#define USE_FEATHER_OLED true
-
-#include <Adafruit_FeatherOLED.h>
-#include <Adafruit_SSD1306.h>
-
-Adafruit_FeatherOLED oled = Adafruit_FeatherOLED();
 
 class xDefaultDisplay:public xDisplay{
   void init();
@@ -1380,25 +1433,85 @@ void xDefaultDisplay::update(){
       oled.print(humidity);
       oled.println("%");
       oled.display();
+      Serial.println("default display update");
+}
+
+xMenu MainMenu;
+xMenu SettingsMenu;
+
+class xMainMenuDisplay:public xDisplay{
+  void init();
+  void update();
+};
+
+void xMainMenuDisplay::init(){
+  TheMenu = &MainMenu;
+  MainMenu.AddMenuItemFunction("Network Status",SetNetworkStatusDisplay);
+  MainMenu.AddMenuItemFunction("Stations",SetNetworkStatusDisplay);
+  MainMenu.AddMenuItemFunction("Sensors",SetNetworkStatusDisplay);
+  MainMenu.AddMenuItemFunction("Interfaces",SetNetworkStatusDisplay);
+  MainMenu.AddMenuItemFunction("Settings",SetNetworkStatusDisplay);
+
+  //MainMenu.
+  up.button_press_handler=xUpMenuPress;
+  down.button_press_handler=xDownMenuPress;
+  enter.button_press_handler=xEnterMenuPress;
+  //Serial.println("Main Menu Init");
+}
+
+void xMainMenuDisplay::update(){
+  TheMenu->display();
+  //Serial.println("MainMenuDisplay");
+}
+
+class xNetStatusDisplay:public xDisplay{
+  void init();
+  void update();
+};
+
+class xSettingsDisplay:public xDisplay{
+  void init();
+  void update();
+};
+
+void xNetStatusDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  oled.println(Ethernet.localIP());
+  oled.display();
+  up.button_press_handler=SetDefaultDisplay;
+  down.button_press_handler=SetDefaultDisplay;
+  enter.button_press_handler=SetDefaultDisplay;
+}
+
+void xNetStatusDisplay::init(){
+}
+
+void xSettingsDisplay::update(){
+}
+
+void xSettingsDisplay::init(){
 }
 
 xDisplay *TheDisplay;
 xDisplayEvent DisplayEvent;
 xDefaultDisplay _DefaultDisplay;
+xMainMenuDisplay MainMenuDisplay;
+xNetStatusDisplay NetStatusDisplay;
 
 static void xDisplayTask(void* pvParameters) {
   DisplayQueue = xQueueCreate(2,sizeof(xDisplayEvent));
   TheDisplay = &_DefaultDisplay;
-  vTaskDelay(30000 / portTICK_PERIOD_MS);
-  DisplayEvent.DisplayAction=DISPLAY_SET;
-  DisplayEvent.Display=&_DefaultDisplay;
+  //vTaskDelay(10000 / portTICK_PERIOD_MS);
+  DisplayEvent.DisplayAction=DISPLAY_UPDATE;
   xQueueSend(DisplayQueue,&DisplayEvent, 1000);
-  oled.init();
   while (true) {
     //try to get time from RTC
+  if(xQueuePeek(DisplayQueue, &DisplayEvent, 10000)==pdTRUE){
     if (xSemaphoreTake(I2CBusSemaphore, 5)) {
       now = rtc.now();
-      if(xQueueReceive(DisplayQueue, &DisplayEvent, 5000)==pdTRUE){
+      if(xQueueReceive(DisplayQueue, &DisplayEvent, 1)==pdTRUE){
+        Serial.println("display event");
         if(DisplayEvent.DisplayAction==DISPLAY_SET){
           TheDisplay=DisplayEvent.Display;
           TheDisplay->init();
@@ -1408,13 +1521,77 @@ static void xDisplayTask(void* pvParameters) {
         else if(DisplayEvent.DisplayAction==DISPLAY_UPDATE) {
           TheDisplay->update();
           TheDisplay->LastUpdate = xTaskGetTickCount();
-        }
-      }
-      else if(xTaskGetTickCount()>(TheDisplay->LastUpdate+TheDisplay->RefreshTimer)) {
-          TheDisplay->update();
-          TheDisplay->LastUpdate = xTaskGetTickCount();
-      }
+        }}
       xSemaphoreGive(I2CBusSemaphore);
     }
-  }
+  } else { // refresh the display even when there are no updates queued
+        if (xSemaphoreTake(I2CBusSemaphore, 5)) {
+          if(xTaskGetTickCount()>(TheDisplay->LastUpdate+TheDisplay->RefreshTimer)) {
+            TheDisplay->update();
+            TheDisplay->LastUpdate = xTaskGetTickCount();
+          }
+          xSemaphoreGive(I2CBusSemaphore);
+        }
+  }}
+}
+
+xDisplayEvent xMenuEvent;
+
+void xUpPress(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&MainMenuDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+  Serial.println("Up Pressed");
+}
+
+void xUpRelease(){
+  Serial.println("Up Released");
+}
+
+void xDownPress(){
+  Serial.println("Down Pressed");
+}
+
+void xDownRelease(){
+  Serial.println("Down Released");
+}
+
+void xEnterPress(){
+  Serial.println("Enter Pressed");
+}
+
+void xEnterRelease(){
+  Serial.println("Enter");
+}
+
+void xUpMenuPress(){
+  xMenuEvent.DisplayAction=DISPLAY_UPDATE;
+  TheDisplay->TheMenu->xMenuUp();
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void xDownMenuPress(){
+  TheDisplay->TheMenu->xMenuDown();
+  xMenuEvent.DisplayAction=DISPLAY_UPDATE;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void xEnterMenuPress(){
+  TheDisplay->TheMenu->xMenuEnter();
+}
+
+void SetDefaultDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_DefaultDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void SetNetworkStatusDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&NetStatusDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void SetSettingsDisplay(){
+
 }
