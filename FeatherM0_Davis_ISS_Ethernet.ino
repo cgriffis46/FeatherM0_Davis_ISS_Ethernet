@@ -1257,10 +1257,7 @@ static void xButtonHandlerTask(void* pvParameters) {
         }
       }
     }
-    else {
-          vTaskDelay(250 / portTICK_PERIOD_MS);
-    }
-
+    taskYIELD();
   }
 }
 
@@ -1532,7 +1529,10 @@ static void xDisplayTask(void* pvParameters) {
           }
           xSemaphoreGive(I2CBusSemaphore);
         }
-  }}
+      
+  }
+  taskYIELD();
+  }
 }
 
 xDisplayEvent xMenuEvent;
