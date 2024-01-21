@@ -1003,7 +1003,7 @@ static void xDataloggerTask(void* pvParameters) {
               DL_pgm_state = DL_PGM_STATE_IDLE;
               break;
             } else if (xQueueReceive(DataStringQueueHandle, &DataPayload, 1) == pdPASS) {  // Item found in the queue
-              Serial.println("Item found in Queue!");
+              //Serial.println("Item found in Queue!");
               DL_pgm_state = DL_PGM_STATE_OPEN_FILE;
             } else {
               DL_pgm_state = DL_PGM_STATE_IDLE;  // nothing in the queue
@@ -1456,7 +1456,7 @@ void xDefaultDisplay::update(){
       oled.print(humidity);
       oled.println("%");
       oled.display();
-      Serial.println("default display update");
+      //Serial.println("default display update");
 }
 
 void TextField::display(){
@@ -1480,7 +1480,10 @@ void TextField::enterChar(){
 
   } 
   else {
-    InputString[index]=CharList[currentchar];}
+    if(index+1<=sizeof(InputString)){
+
+    } 
+  }
   Serial.println(index);
 }
 
@@ -1543,15 +1546,15 @@ void xSettingsDisplay::init(){
   SettingsMenu.AddMenuItemFunction("Network",SetDefaultDisplay);
   SettingsMenu.AddMenuItemFunction("System",SetDefaultDisplay);
   SettingsMenu.AddMenuItemFunction("Display",SetDefaultDisplay);
-//  SettingsMenu.AddMenuItemFunction("Interfaces",SetNetworkStatusDisplay);
-//  SettingsMenu.AddMenuItemFunction("Settings",SetSettingsDisplay);
   up.button_press_handler=xUpMenuPress;
   down.button_press_handler=xDownMenuPress;
   enter.button_press_handler=xEnterMenuPress;
 }
+
 void xSettingsDisplay::update(){
     TheMenu->display();
 }
+
 class xInterfacesDisplay:public xDisplay{
   void init();
   void update();
@@ -1581,6 +1584,12 @@ class xWundergroundEditStationNameDisplay:public xDisplay{
   TextField WundergroundStationName;
 };
 
+class xWundergroundEditStationPasswordDisplay:public xDisplay{
+  void init();
+  void update();
+  TextField WundergroundStationPassword;
+};
+
 xDisplay *TheDisplay;
 xDisplayEvent DisplayEvent;
 xDefaultDisplay _DefaultDisplay;
@@ -1590,6 +1599,7 @@ xSettingsDisplay SettingsDisplay;
 xInterfacesDisplay InterfaceSettingsDisplay;
 xWundergroundSettingsDisplay WundergroundSettingsDisplay;
 xWundergroundEditStationNameDisplay _xWundergroundEditStationNameDisplay;
+xWundergroundEditStationPasswordDisplay _xWundergroundEditStationPasswordDisplay;
 
 static void xDisplayTask(void* pvParameters) {
   DisplayQueue = xQueueCreate(2,sizeof(xDisplayEvent));
@@ -1642,15 +1652,12 @@ void xWundergroundSettingsDisplay::update(){
   TheMenu->display();
 }
 
-
-
 void xWundergroundEditStationNameDisplay::init(){
   TheDisplay->TheTextField=&WundergroundStationName;
   memcpy(WundergroundStationName.InputString,WundergroundStationID,64);
   up.button_press_handler=xUpTextfieldPress;
   down.button_press_handler=xDownTextfieldPress;
   enter.button_press_handler=xEnterTextfieldPress;
-  
 }
 
 void xWundergroundEditStationNameDisplay::update(){
@@ -1660,14 +1667,20 @@ void xWundergroundEditStationNameDisplay::update(){
   oled.display();
 }
 
-class xWundergroundEditStationPasswordDisplay:public xDisplay{
-  void init();
-  void update();
-};
+void xWundergroundEditStationPasswordDisplay::init(){
+  TheDisplay->TheTextField=&WundergroundStationPassword;
+  memcpy(WundergroundStationPassword.InputString,WundergroundStationID,64);
+  up.button_press_handler=xUpTextfieldPress;
+  down.button_press_handler=xDownTextfieldPress;
+  enter.button_press_handler=xEnterTextfieldPress;
+}
 
-void xWundergroundEditStationPasswordDisplay::init(){}
-
-void xWundergroundEditStationPasswordDisplay::update(){}
+void xWundergroundEditStationPasswordDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  WundergroundStationPassword.display();
+  oled.display();
+}
 
 xDisplayEvent xMenuEvent;
 
@@ -1707,52 +1720,43 @@ void xUpMenuPress(){
 void xDownMenuPress(){
   TheDisplay->TheMenu->xMenuDown();
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
-  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
-}
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 
 void xEnterMenuPress(){
-  TheDisplay->TheMenu->xMenuEnter();
-}
+  TheDisplay->TheMenu->xMenuEnter();}
 
 void xUpTextfieldPress(){
   TheDisplay->TheTextField->previousChar();
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
-  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
-}
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 
 void xDownTextfieldPress(){
   TheDisplay->TheTextField->nextChar();
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
-  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
-}
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 
 void xEnterTextfieldPress(){
-  TheDisplay->TheTextField->nextChar();
-}
+  TheDisplay->TheTextField->nextChar();}
 
 void SetDefaultDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_DefaultDisplay;
-  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
-}
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 
 void SetNetworkStatusDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&NetStatusDisplay;
-  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
-}
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 
 void SetSettingsDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&SettingsDisplay;
-  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
-}
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 
 void SetInterfacesDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&InterfaceSettingsDisplay;
-  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
-}
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 
 void SetWundergroundSettingsDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
