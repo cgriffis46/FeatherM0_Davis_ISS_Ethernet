@@ -1266,16 +1266,6 @@ enum xMenuFunction_T {
   Menu       // Menu Action loads another Menu
 };
 
-typedef struct xMenuItem {
-  xMenuFunction_T MenuFunctionType;  // Determine if Menu Item is a Function or a sub-menu
-  void (*function_ptr)(void);        // Function pointer for a Menu Action
-  String text;                   // menu item
-//  xMenuItem(const char t[32], void (*ptr)(void)) {
-//    function_ptr = ptr;
-//  }
-//  friend class xMenu;
-};
-
 class xDisplayItem {
   public:
   virtual void init();
@@ -1291,6 +1281,14 @@ void xDisplayItem::init(){}
 // xMenu will be a subclass of xDisplayItem
 // When we render the menu we can call display()
 class xMenu : public xDisplayItem {
+
+  typedef struct xMenuItem {
+  xMenuFunction_T MenuFunctionType;  // Determine if Menu Item is a Function or a sub-menu
+  void (*function_ptr)(void);        // Function pointer for a Menu Action
+  String text;                   // menu item
+  xMenu *SubMenu;
+};
+
   int numButtons;
   int sel = 0; // menu item selected
   int DisplayLines = 4; // max # lines to display for the menu
@@ -1311,6 +1309,11 @@ class xMenu : public xDisplayItem {
 };
 
 void xMenu::init(){
+  for(int i=0;i<8;i++){
+    MenuItems[i].text = "";
+    MenuItems[i].function_ptr = NULL;
+  }
+  sel=0;
   items = 0;
   FirstLine = 0;
   EndLine = 4;
@@ -1356,6 +1359,7 @@ void xMenu::xMenuEnter(){
 void xMenu::AddMenuItemFunction(String _text,void (*ptr)(void)){
   Serial.print("Menu Function: ");Serial.println(_text);
   if((items<MAXMENUITEMS)){
+    MenuItems[items].MenuFunctionType=Function;
     MenuItems[items].text=_text;
     MenuItems[items].function_ptr=ptr;
     items++;
@@ -1363,12 +1367,34 @@ void xMenu::AddMenuItemFunction(String _text,void (*ptr)(void)){
   }
 }
 
-void xMenu::AddMenuItemSubmenu(String _text, xMenu *_SubMenu){}
+void xMenu::AddMenuItemSubmenu(String _text, xMenu *_SubMenu){
+  Serial.print("Submenu: ");Serial.println(_text);
+  if((items<MAXMENUITEMS)){
+    MenuItems[items].MenuFunctionType=Menu;
+    MenuItems[items].text=_text;
+    MenuItems[items].SubMenu=_SubMenu;
+    items++;
+    if(items>EndLine){EndLine = DisplayLines;} else {EndLine = items;}
+  }
+}
+const char CharList[] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9',' '};
 
-class xDisplay {
-  xDisplayItem *DisplayItems[6];
+class TextField : public xDisplayItem{
   public:
+    char InputString[64];
+    int index=0; // index within the string
+    int currentchar=0; // 
+    void nextChar();
+    void previousChar();
+    void enterChar();
+    void display();
+};
+class xDisplay {
+
+  public:
+    xDisplayItem *CurrentDisplayItem;
     xMenu *TheMenu;
+    TextField *TheTextField;
     bool AddDisplayItem(xDisplayItem *displayItem);
     void setMenu(xMenu *_Menu);
     virtual void init();
@@ -1433,8 +1459,35 @@ void xDefaultDisplay::update(){
       Serial.println("default display update");
 }
 
+void TextField::display(){
+ oled.print(InputString);
+}
+
+void TextField::nextChar(){
+  if(currentchar+1>sizeof(CharList)){currentchar = 0;} else currentchar++;
+  InputString[index]=CharList[currentchar];
+  Serial.println(CharList[currentchar]);
+}
+
+void TextField::previousChar(){
+  if(currentchar-1<0){currentchar = sizeof(CharList)-1;} else currentchar--;
+  InputString[index]=CharList[currentchar];
+  Serial.println(CharList[currentchar]);
+}
+
+void TextField::enterChar(){
+  if(CharList[currentchar]==' '){
+
+  } 
+  else {
+    InputString[index]=CharList[currentchar];}
+  Serial.println(index);
+}
+
 xMenu MainMenu;
 xMenu SettingsMenu;
+xMenu InterfaceSettingsMenu;
+xMenu WundergroundSettingsMenu;
 
 class xMainMenuDisplay:public xDisplay{
   void init();
@@ -1443,13 +1496,13 @@ class xMainMenuDisplay:public xDisplay{
 
 void xMainMenuDisplay::init(){
   TheMenu = &MainMenu;
+  MainMenu.init();
   MainMenu.AddMenuItemFunction("Network Status",SetNetworkStatusDisplay);
   MainMenu.AddMenuItemFunction("Stations",SetNetworkStatusDisplay);
   MainMenu.AddMenuItemFunction("Sensors",SetNetworkStatusDisplay);
-  MainMenu.AddMenuItemFunction("Interfaces",SetNetworkStatusDisplay);
-  MainMenu.AddMenuItemFunction("Settings",SetNetworkStatusDisplay);
+  MainMenu.AddMenuItemFunction("Interfaces",SetInterfacesDisplay);
+  MainMenu.AddMenuItemFunction("Settings",SetSettingsDisplay);
 
-  //MainMenu.
   up.button_press_handler=xUpMenuPress;
   down.button_press_handler=xDownMenuPress;
   enter.button_press_handler=xEnterMenuPress;
@@ -1466,10 +1519,8 @@ class xNetStatusDisplay:public xDisplay{
   void update();
 };
 
-class xSettingsDisplay:public xDisplay{
-  void init();
-  void update();
-};
+void xNetStatusDisplay::init(){
+}
 
 void xNetStatusDisplay::update(){
   oled.clearDisplay();
@@ -1481,25 +1532,68 @@ void xNetStatusDisplay::update(){
   enter.button_press_handler=SetDefaultDisplay;
 }
 
-void xNetStatusDisplay::init(){
-}
-
-void xSettingsDisplay::update(){
-}
+class xSettingsDisplay:public xDisplay{
+  void init();
+  void update();
+};
 
 void xSettingsDisplay::init(){
+  TheMenu = &SettingsMenu;
+  SettingsMenu.init();
+  SettingsMenu.AddMenuItemFunction("Network",SetDefaultDisplay);
+  SettingsMenu.AddMenuItemFunction("System",SetDefaultDisplay);
+  SettingsMenu.AddMenuItemFunction("Display",SetDefaultDisplay);
+//  SettingsMenu.AddMenuItemFunction("Interfaces",SetNetworkStatusDisplay);
+//  SettingsMenu.AddMenuItemFunction("Settings",SetSettingsDisplay);
+  up.button_press_handler=xUpMenuPress;
+  down.button_press_handler=xDownMenuPress;
+  enter.button_press_handler=xEnterMenuPress;
 }
+void xSettingsDisplay::update(){
+    TheMenu->display();
+}
+class xInterfacesDisplay:public xDisplay{
+  void init();
+  void update();
+};
+
+void xInterfacesDisplay::init(){
+  TheMenu = &InterfaceSettingsMenu;
+  InterfaceSettingsMenu.init();
+  InterfaceSettingsMenu.AddMenuItemFunction("Wunderground",SetWundergroundSettingsDisplay);
+  up.button_press_handler=xUpMenuPress;
+  down.button_press_handler=xDownMenuPress;
+  enter.button_press_handler=xEnterMenuPress;
+}
+
+void xInterfacesDisplay::update(){
+  TheMenu->display();
+}
+
+class xWundergroundSettingsDisplay:public xDisplay{
+  void init();
+  void update();
+};
+
+class xWundergroundEditStationNameDisplay:public xDisplay{
+  void init();
+  void update();
+  TextField WundergroundStationName;
+};
 
 xDisplay *TheDisplay;
 xDisplayEvent DisplayEvent;
 xDefaultDisplay _DefaultDisplay;
 xMainMenuDisplay MainMenuDisplay;
 xNetStatusDisplay NetStatusDisplay;
+xSettingsDisplay SettingsDisplay;
+xInterfacesDisplay InterfaceSettingsDisplay;
+xWundergroundSettingsDisplay WundergroundSettingsDisplay;
+xWundergroundEditStationNameDisplay _xWundergroundEditStationNameDisplay;
 
 static void xDisplayTask(void* pvParameters) {
   DisplayQueue = xQueueCreate(2,sizeof(xDisplayEvent));
   TheDisplay = &_DefaultDisplay;
-  //vTaskDelay(10000 / portTICK_PERIOD_MS);
   DisplayEvent.DisplayAction=DISPLAY_UPDATE;
   xQueueSend(DisplayQueue,&DisplayEvent, 1000);
   while (true) {
@@ -1529,11 +1623,51 @@ static void xDisplayTask(void* pvParameters) {
           }
           xSemaphoreGive(I2CBusSemaphore);
         }
-      
   }
   taskYIELD();
   }
 }
+
+void::xWundergroundSettingsDisplay::init(){
+  TheMenu=&WundergroundSettingsMenu;
+  WundergroundSettingsMenu.init();
+  WundergroundSettingsMenu.AddMenuItemFunction("Station Name",SetWundergroundEditNameDisplay);
+  WundergroundSettingsMenu.AddMenuItemFunction("Station Password",SetWundergroundEditNameDisplay);
+  up.button_press_handler=xUpMenuPress;
+  down.button_press_handler=xDownMenuPress;
+  enter.button_press_handler=xEnterMenuPress;
+}
+
+void xWundergroundSettingsDisplay::update(){
+  TheMenu->display();
+}
+
+
+
+void xWundergroundEditStationNameDisplay::init(){
+  TheDisplay->TheTextField=&WundergroundStationName;
+  memcpy(WundergroundStationName.InputString,WundergroundStationID,64);
+  up.button_press_handler=xUpTextfieldPress;
+  down.button_press_handler=xDownTextfieldPress;
+  enter.button_press_handler=xEnterTextfieldPress;
+  
+}
+
+void xWundergroundEditStationNameDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  WundergroundStationName.display();
+  oled.display();
+}
+
+class xWundergroundEditStationPasswordDisplay:public xDisplay{
+  void init();
+  void update();
+};
+
+void xWundergroundEditStationPasswordDisplay::init(){}
+
+void xWundergroundEditStationPasswordDisplay::update(){}
 
 xDisplayEvent xMenuEvent;
 
@@ -1580,6 +1714,22 @@ void xEnterMenuPress(){
   TheDisplay->TheMenu->xMenuEnter();
 }
 
+void xUpTextfieldPress(){
+  TheDisplay->TheTextField->previousChar();
+  xMenuEvent.DisplayAction=DISPLAY_UPDATE;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void xDownTextfieldPress(){
+  TheDisplay->TheTextField->nextChar();
+  xMenuEvent.DisplayAction=DISPLAY_UPDATE;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void xEnterTextfieldPress(){
+  TheDisplay->TheTextField->nextChar();
+}
+
 void SetDefaultDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_DefaultDisplay;
@@ -1593,5 +1743,25 @@ void SetNetworkStatusDisplay(){
 }
 
 void SetSettingsDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&SettingsDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
 
+void SetInterfacesDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&InterfaceSettingsDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void SetWundergroundSettingsDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&WundergroundSettingsDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void SetWundergroundEditNameDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xWundergroundEditStationNameDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
