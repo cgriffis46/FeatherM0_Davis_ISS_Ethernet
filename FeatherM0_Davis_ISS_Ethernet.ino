@@ -167,8 +167,6 @@ EthernetClient WundergroundEthernetCclient;
 
 #include "WundergroundInfce.h"
 
-#define WundergroundStationIDLength 64
-#define WundergroundStationIDPassword 64
 #define wx_version String("00.01.00");
 
 #define SM_Wunderground_Infce_Init (byte)91
@@ -362,6 +360,7 @@ void setup() {
   if(fram.begin(0x50)){
      //loadCredentials();            // Load WLAN credentials from network
      //LoadSensorsFromDisk();
+     //RestoreDefaults();
      LoadWundergroundCredentials();// Load Wunderground Interface credentials
   }
   else{
@@ -1444,7 +1443,10 @@ void xMenu::AddMenuItemSubmenu(String _text, xMenu *_SubMenu){
     if(items>EndLine){EndLine = DisplayLines;} else {EndLine = items;}
   }
 }
-const char CharList[] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9',' '};
+
+#define MaxCharList 38
+
+const char CharList[MaxCharList] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9','<','>'};
 
 class TextField : public xDisplayItem{
   public:
@@ -1538,18 +1540,25 @@ void xDefaultDisplay::update(){
 }
 
 void TextField::display(){
- oled.print(InputString);
+  for(int i=0;i<32;i++){
+    if(i==index){
+      oled.print(CharList[currentchar]);
+    }
+    else
+     oled.print(InputString[i]);
+  }
+
 }
 
 void TextField::nextChar(){
-  if(currentchar+1>=37){currentchar = 0;} else currentchar++;
-  InputString[index]=CharList[currentchar];
+  if(currentchar+1>MaxCharList){currentchar = MaxCharList;} else currentchar++;
+  //InputString[index]=CharList[currentchar];
   Serial.println(CharList[currentchar]);
 }
 
 void TextField::previousChar(){
-  if(currentchar-1<0){currentchar = 36;} else currentchar--;
-  InputString[index]=CharList[currentchar];
+  if(currentchar-1<0){currentchar = 0;} else currentchar--;
+  //InputString[index]=CharList[currentchar];
   Serial.println(CharList[currentchar]);
 }
 
@@ -1557,7 +1566,7 @@ void TextField::enterChar(){
   if(CharList[currentchar]==' '){    
     SaveTextField();}
   else {
-    if(index+1<=sizeof(InputString)){
+    if(index+1<=64){
       index++;
     } else index=0;
   }
@@ -1659,14 +1668,14 @@ class xWundergroundEditStationNameDisplay:public xDisplay{
   void init();
   void update();
   void saveDisplay();
-  TextField WundergroundStationName;
+  TextField _WundergroundStationName;
 };
 
 class xWundergroundEditStationPasswordDisplay:public xDisplay{
   void init();
   void update();
   void saveDisplay();
-  TextField WundergroundStationPassword;
+  TextField _WundergroundStationPassword;
 };
 
 void xWundergroundEditStationNameDisplay::saveDisplay(){
@@ -1737,7 +1746,7 @@ void::xWundergroundSettingsDisplay::init(){
   TheMenu=&WundergroundSettingsMenu;
   WundergroundSettingsMenu.init();
   WundergroundSettingsMenu.AddMenuItemFunction("Station Name",SetWundergroundEditNameDisplay);
-  WundergroundSettingsMenu.AddMenuItemFunction("Station Password",SetWundergroundEditNameDisplay);
+  WundergroundSettingsMenu.AddMenuItemFunction("Station Password",SetWundergroundEditPasswordDisplay);
   up.button_press_handler=xUpMenuPress;
   down.button_press_handler=xDownMenuPress;
   enter.button_press_handler=xEnterMenuPress;
@@ -1748,8 +1757,8 @@ void xWundergroundSettingsDisplay::update(){
 }
 
 void xWundergroundEditStationNameDisplay::init(){
-  TheDisplay->TheTextField=&WundergroundStationName;
-  memcpy(WundergroundStationName.InputString,WundergroundStationID,64);
+  TheDisplay->TheTextField=&_WundergroundStationName;
+  memcpy(_WundergroundStationName.InputString,WundergroundStationID,64);
   up.button_press_handler=xUpTextfieldPress;
   down.button_press_handler=xDownTextfieldPress;
   enter.button_press_handler=xEnterTextfieldPress;
@@ -1758,13 +1767,13 @@ void xWundergroundEditStationNameDisplay::init(){
 void xWundergroundEditStationNameDisplay::update(){
   oled.clearDisplay();
   oled.setCursor(0, 0);
-  WundergroundStationName.display();
+  _WundergroundStationName.display();
   oled.display();
 }
 
 void xWundergroundEditStationPasswordDisplay::init(){
-  TheDisplay->TheTextField=&WundergroundStationPassword;
-  memcpy(WundergroundStationPassword.InputString,WundergroundStationID,64);
+  TheDisplay->TheTextField=&_WundergroundStationPassword;
+  memcpy(_WundergroundStationPassword.InputString,WundergroundStationPassword,64);
   up.button_press_handler=xUpTextfieldPress;
   down.button_press_handler=xDownTextfieldPress;
   enter.button_press_handler=xEnterTextfieldPress;
@@ -1773,7 +1782,7 @@ void xWundergroundEditStationPasswordDisplay::init(){
 void xWundergroundEditStationPasswordDisplay::update(){
   oled.clearDisplay();
   oled.setCursor(0, 0);
-  WundergroundStationPassword.display();
+  _WundergroundStationPassword.display();
   oled.display();
 }
 
@@ -1862,6 +1871,12 @@ void SetWundergroundSettingsDisplay(){
 void SetWundergroundEditNameDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xWundergroundEditStationNameDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void SetWundergroundEditPasswordDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xWundergroundEditStationPasswordDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 

@@ -7,7 +7,7 @@
 
 
 #ifdef USE_WUNDERGROUND_INFCE
-
+#define _DEBUG_WU_INFCE true
 #include "WundergroundInfce.h"
 #include <Ethernet.h>
 char buffer[256];
@@ -25,6 +25,12 @@ switch (PgmState) {
   {
     if(WundergroundInfceEnable&& (strlen(WundergroundStationID)>0) && (strlen(WundergroundStationPassword)>0)) {
         PgmState = SM_Wunderground_Infce_Idle;
+    } else
+    {
+      Serial.println("Could Not Init Wunderground Infce");
+      Serial.print("Enable: ");Serial.println(WundergroundInfceEnable);
+      Serial.print("Station ID: ");Serial.println(WundergroundStationID);
+      Serial.print("Station Password: ");Serial.println(WundergroundStationPassword);
     }
     break;
   }
@@ -211,7 +217,7 @@ switch (PgmState) {
 
     if(Wundergroundpayload.length()>0){ // only transmit if we have a payload
       PgmState = SM_Wunderground_Infce_Make_HTTP_Request;
-    }
+    } else {Serial.println("no payload");}
     break; // assemble payload
   }
   case SM_Wunderground_Infce_Idle:
