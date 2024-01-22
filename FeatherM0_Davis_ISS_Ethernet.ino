@@ -1085,7 +1085,10 @@ static void xDataloggerTask(void* pvParameters) {
 
 enum xDisplayAction{
   DISPLAY_SET,
-  DISPLAY_UPDATE
+  DISPLAY_UPDATE,
+  DISPLAY_SAVE,
+  DISPLAY_OK,
+  DISPLAY_NEXT_FIELD
 };
 
 enum xButtonState {
@@ -1389,10 +1392,12 @@ class TextField : public xDisplayItem{
     void enterChar();
     void display();
 };
+
 class xDisplay {
 
   public:
     xDisplayItem *CurrentDisplayItem;
+    int _currentDisplayItem;
     xMenu *TheMenu;
     TextField *TheTextField;
     bool AddDisplayItem(xDisplayItem *displayItem);
@@ -1402,10 +1407,20 @@ class xDisplay {
     TickType_t LastUpdate;
     TickType_t RefreshTimer = 5000;
     TickType_t DisplayTimeout = 0;
+    virtual void NextDisplayItem();
+    virtual void ok();
+    virtual void saveDisplay();
+  private:
+    xDisplayItem *DisplayItemList;
 };
+
+void xDisplay::NextDisplayItem(){}
+void xDisplay::ok(){}
+void xDisplay::saveDisplay(){}
 
 void xDisplay::setMenu(xMenu *_Menu){
   TheMenu = _Menu;
+
 }
 
 class xDisplayEvent{
@@ -1464,13 +1479,13 @@ void TextField::display(){
 }
 
 void TextField::nextChar(){
-  if(currentchar+1>sizeof(CharList)){currentchar = 0;} else currentchar++;
+  if(currentchar+1>=37){currentchar = 0;} else currentchar++;
   InputString[index]=CharList[currentchar];
   Serial.println(CharList[currentchar]);
 }
 
 void TextField::previousChar(){
-  if(currentchar-1<0){currentchar = sizeof(CharList)-1;} else currentchar--;
+  if(currentchar-1<0){currentchar = 36;} else currentchar--;
   InputString[index]=CharList[currentchar];
   Serial.println(CharList[currentchar]);
 }
@@ -1622,7 +1637,13 @@ static void xDisplayTask(void* pvParameters) {
         else if(DisplayEvent.DisplayAction==DISPLAY_UPDATE) {
           TheDisplay->update();
           TheDisplay->LastUpdate = xTaskGetTickCount();
-        }}
+        }
+        else if(DisplayEvent.DisplayAction==DISPLAY_SAVE){
+                TheDisplay->LastUpdate = xTaskGetTickCount();
+                TheDisplay->saveDisplay();
+        }
+        else {}
+        }
       xSemaphoreGive(I2CBusSemaphore);
     }
   } else { // refresh the display even when there are no updates queued
