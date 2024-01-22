@@ -256,9 +256,7 @@ void handleWundergroundConfigSave(){
 } // handleWundergroundConfigSave()
 */
 
-/* 
-
-void LoadWundergroundCredentials(){
+static void LoadWundergroundCredentials(){
   char ok[2 + 1];
   uint8_t enable = 0;
   uint32_t address;
@@ -342,10 +340,7 @@ void LoadWundergroundCredentials(){
 
 } // LoadWundergroundCredentials()
 
-*/
-
-/*
-void SaveWundergroundCredentials(){
+static void SaveWundergroundCredentials(){
   uint32_t address;
   char ok[2 + 1];
   uint8_t buffer1[512];
@@ -450,6 +445,5 @@ void SaveWundergroundCredentials(){
       fram.write(mem_WUNDERGROUND_TIME_SOURCE,WundergroundTimeSource);
     #endif
 } // SaveWundergroundCredentials()
-*/
 
 #endif

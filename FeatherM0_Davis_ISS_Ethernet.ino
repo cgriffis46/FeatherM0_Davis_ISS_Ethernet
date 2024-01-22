@@ -1,3 +1,5 @@
+#include <Adafruit_EEPROM_I2C.h>
+//#include <Adafruit_FRAM_I2C.h>
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_GrayOLED.h>
@@ -10,6 +12,55 @@
 #include <Adafruit_SleepyDog.h>
 
 #define USE_FEATHER_OLED true
+#define USE_I2C_EEPROM true
+
+#ifdef USE_I2C_FRAM
+  #include <Adafruit_FRAM_I2C.h>
+#endif
+
+#ifdef USE_I2C_EEPROM
+  #include <Adafruit_EEPROM_I2C.h>
+  Adafruit_EEPROM_I2C fram = Adafruit_EEPROM_I2C();
+#endif
+
+#ifdef USE_SPI_FRAM
+  #include <Adafruit_FRAM_SPI.h>
+  uint8_t FRAM_SCK = 14;
+  uint8_t FRAM_MISO = 12;
+  uint8_t FRAM_MOSI = 13;
+  uint8_t FRAM_CS = 15;
+  Adafruit_FRAM_SPI fram = Adafruit_FRAM_SPI(FRAM_SCK, FRAM_MISO, FRAM_MOSI, FRAM_CS);
+#endif
+
+#define mem_SSID (uint32_t)0x0000
+#define mem_PASSWORD (uint32_t)0x0025
+
+#define mem_DEV_USER (uint32_t)0x0050
+#define mem_DEV_PASSWORD (uint32_t)0x0075
+
+#define mem_SECURTIY_TYPE 
+#define mem_DNS_SERVER (uint32_t)0x0200
+#define mem_NTP_SERVER (uint32_t)0x0240
+#define mem_DEFAULT_DNS_SERVER
+#define mem_DEFAULT_NTP_SERVER
+
+#define mem_PRESSURE_OFFSET (uint32_t)0x0400
+#define mem_BAR_ENABLE (uint32_t)0x0406
+#define mem_INFCE_THERMOMETER_ENABLE (uint32_t)0x0407
+#define mem_INFCE_HUMIDITY_ENABLE (uint32_t)0x0408
+#define mem_INFCE_THERMOMETER_UNIT (uint32_t)0x0409
+
+#define mem_WUNDERGROUND_ENABLE (uint32_t)0x0100
+#define mem_WUNDERGROUND_TEMP_ID (uint32_t)0x0101
+#define mem_WUNDERGROUND_HUMIDITY_ID (uint32_t)0x0102
+#define mem_WUNDERGROUND_TIME_SOURCE (uint32_t)0x0103
+
+#define mem_WUNDERGROUNDID (uint32_t)0x0125
+#define mem_WUNDERGROUNDPASSWORD (uint32_t)0x0150
+
+#define WundergroundStationIDLength 64
+#define WundergroundStationIDPassword 64
+
 
 #include <Adafruit_FeatherOLED.h>
 #include <Adafruit_SSD1306.h>
@@ -37,6 +88,8 @@ Adafruit_FeatherOLED oled = Adafruit_FeatherOLED();
 #define _INFCE_SEND_TEMP_HUMIDITY
 #ifdef _USE_TH_SENSOR
 
+static void xDisplayTask(void* pvParameters);
+
 //static void readTempHumiditySensor();
 //  Ticker readTHSensorTicker(readTempHumiditySensor,2,0);
 float temperature = NAN, humidity = NAN;
@@ -51,7 +104,6 @@ bool UseCelcius = false;
 #include <EthernetUdp.h>
 #include <DNS.h>
 #include <SPI.h>
-//#include <EEPROM.h>
 // FreeRTOS Libraries
 #include <FreeRTOS.h>
 #include <FreeRTOSConfig.h>
@@ -113,6 +165,8 @@ IPAddress wundergroundIP(0, 0, 0, 0);
 bool WundergroundInfceEnable = true;
 EthernetClient WundergroundEthernetCclient;
 
+#include "WundergroundInfce.h"
+
 #define WundergroundStationIDLength 64
 #define WundergroundStationIDPassword 64
 #define wx_version String("00.01.00");
@@ -169,16 +223,15 @@ String WU_station_pwd = "";  //# Wunderground station password
 String WUcreds;              // = "ID=" + WU_station_id + "&PASSWORD="+ WU_station_pwd;
 const char* url = "weatherstation.wunderground.com";
 String action_str = "&action=updateraw";
-String W_Software_Type = "&softwaretype=rp2040wx%20version" + wx_version;
+String W_Software_Type = "&softwaretype=M0WX%20version" + wx_version;
 //  bool shouldUpdateWundergroundInfce = false;
 // bool WundergroundInfceEnable = false;
-char WundergroundStationID[WundergroundStationIDLength] = "KMAATTLE33";
-char WundergroundStationPassword[WundergroundStationIDPassword] = "JWM4JYWE";
+char WundergroundStationID[WundergroundStationIDLength] = "";
+char WundergroundStationPassword[WundergroundStationIDPassword] = "";
 //struct repeating_timer WU_Update_timer;
 uint8_t thermometer1Type = WU_S_TEMPF_T;
 uint8_t humidity1_sensor_type = WU_S_HUMIDITY_T;
 uint8_t WundergroundTimeSource = 1;
-
 
 static void xUpdateWundergroundInfce(void* pvParameters);  // Must be called in main loop
 
@@ -303,6 +356,17 @@ void setup() {
     Serial.println("Could not initialize RTC!");
   }
 #endif  // USE_RTC
+
+// Initialize NVRAM
+  Serial.println("Initialize NVRAM");
+  if(fram.begin(0x50)){
+     //loadCredentials();            // Load WLAN credentials from network
+     //LoadSensorsFromDisk();
+     LoadWundergroundCredentials();// Load Wunderground Interface credentials
+  }
+  else{
+    Serial.println("could not initialize fram");
+  }
 
     oled.init();
 
@@ -1420,7 +1484,6 @@ void xDisplay::saveDisplay(){}
 
 void xDisplay::setMenu(xMenu *_Menu){
   TheMenu = _Menu;
-
 }
 
 class xDisplayEvent{
@@ -1491,13 +1554,12 @@ void TextField::previousChar(){
 }
 
 void TextField::enterChar(){
-  if(CharList[currentchar]==' '){
-
-  } 
+  if(CharList[currentchar]==' '){    
+    SaveTextField();}
   else {
     if(index+1<=sizeof(InputString)){
-
-    } 
+      index++;
+    } else index=0;
   }
   Serial.println(index);
 }
@@ -1596,14 +1658,26 @@ class xWundergroundSettingsDisplay:public xDisplay{
 class xWundergroundEditStationNameDisplay:public xDisplay{
   void init();
   void update();
+  void saveDisplay();
   TextField WundergroundStationName;
 };
 
 class xWundergroundEditStationPasswordDisplay:public xDisplay{
   void init();
   void update();
+  void saveDisplay();
   TextField WundergroundStationPassword;
 };
+
+void xWundergroundEditStationNameDisplay::saveDisplay(){
+  SaveWundergroundCredentials();
+  SetDefaultDisplay();
+}
+
+void xWundergroundEditStationPasswordDisplay::saveDisplay(){
+  SaveWundergroundCredentials();
+  SetDefaultDisplay();
+}
 
 xDisplay *TheDisplay;
 xDisplayEvent DisplayEvent;
@@ -1757,7 +1831,7 @@ void xDownTextfieldPress(){
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 
 void xEnterTextfieldPress(){
-  TheDisplay->TheTextField->nextChar();}
+  TheDisplay->TheTextField->enterChar();}
 
 void SetDefaultDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
@@ -1788,5 +1862,10 @@ void SetWundergroundSettingsDisplay(){
 void SetWundergroundEditNameDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xWundergroundEditStationNameDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void SaveTextField(){
+  xMenuEvent.DisplayAction=DISPLAY_SAVE;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
