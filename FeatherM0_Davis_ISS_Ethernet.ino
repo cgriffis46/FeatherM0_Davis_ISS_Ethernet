@@ -1727,7 +1727,7 @@ xMainMenuDisplay MainMenuDisplay;
 xNetStatusDisplay NetStatusDisplay;
 xSettingsDisplay SettingsDisplay;
 xInterfacesDisplay InterfaceSettingsDisplay;
-xWundergroundSettingsDisplay WundergroundSettingsDisplay;
+xWundergroundSettingsDisplay WundergroundSettingsDisplay; 
 xWundergroundEditStationNameDisplay _xWundergroundEditStationNameDisplay;
 xWundergroundEditStationPasswordDisplay _xWundergroundEditStationPasswordDisplay;
 xWundergroundEditStationActiveDisplay _xWundergroundEditStationActiveDisplay;
@@ -1778,7 +1778,7 @@ static void xDisplayTask(void* pvParameters) {
 void::xWundergroundSettingsDisplay::init(){
   TheMenu=&WundergroundSettingsMenu;
   WundergroundSettingsMenu.init();
-  WundergroundSettingsMenu.AddMenuItemFunction("Station Name",SetWundergroundEditActiveDisplay);
+  WundergroundSettingsMenu.AddMenuItemFunction("Station Active",SetWundergroundEditActiveDisplay);
   WundergroundSettingsMenu.AddMenuItemFunction("Station Name",SetWundergroundEditNameDisplay);
   WundergroundSettingsMenu.AddMenuItemFunction("Station Password",SetWundergroundEditPasswordDisplay);
   up.button_press_handler=xUpMenuPress;
