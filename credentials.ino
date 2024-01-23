@@ -419,8 +419,8 @@ void RestoreDefaults(){
   //String("user").toCharArray(dev_user, sizeof(dev_user));
   //String("password").toCharArray(dev_password, sizeof(dev_password));
 
-  String("KMAATTLE33").toCharArray(WundergroundStationID,sizeof(WundergroundStationID));
-  String("JWM4JYWE").toCharArray(WundergroundStationPassword,sizeof(WundergroundStationPassword));
+  String("").toCharArray(WundergroundStationID,sizeof(WundergroundStationID));
+  String("").toCharArray(WundergroundStationPassword,sizeof(WundergroundStationPassword));
   WundergroundInfceEnable=true;
   thermometer1Type = WU_S_TEMPF_T;
   humidity1_sensor_type = WU_S_HUMIDITY_T;

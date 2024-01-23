@@ -1,3 +1,15 @@
+/*
+  (c) 2023 by Cory Griffis
+
+  it is released under Creative Commons Attrib Share-Alike License
+  You are free to use/extend this library but please abide with the CC-BY-SA license:
+  http://creativecommons.org/licenses/by-sa/3.0/
+
+
+
+*/
+
+
 #include <Adafruit_EEPROM_I2C.h>
 //#include <Adafruit_FRAM_I2C.h>
 
@@ -68,18 +80,6 @@
 Adafruit_FeatherOLED oled = Adafruit_FeatherOLED();
 
 //#include <postParser.h>
-
-/*
-  (c) 2023.10.26 by Cory Griffis
-
-  it is released under Creative Commons Attrib Share-Alike License
-  You are free to use/extend this library but please abide with the CC-BY-SA license:
-  http://creativecommons.org/licenses/by-sa/3.0/
-
-
-
-*/
-
 
 #define _USE_RTC_PCF8523 true
 #define USE_WUNDERGROUND_INFCE
