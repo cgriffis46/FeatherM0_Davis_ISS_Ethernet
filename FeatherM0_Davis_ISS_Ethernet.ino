@@ -1467,12 +1467,30 @@ class YNField : public xDisplayItem{
     void display();
 };
 
+void YNField::display(){
+  if(YN==true){
+    oled.print("Y");
+  } else {
+    oled.print("N");
+  }
+}
+
+void YNField::next(){
+  if(YN==true) {YN=false;}
+  else {YN=true;}
+}
+
+void YNField::setField(bool _yn){
+  YN=_yn;
+}
+
 class xDisplay {
   public:
     xDisplayItem *CurrentDisplayItem;
     int _currentDisplayItem;
     xMenu *TheMenu;
     TextField *TheTextField;
+    YNField *TheYNField;
     bool AddDisplayItem(xDisplayItem *displayItem);
     void setMenu(xMenu *_Menu);
     virtual void init();
@@ -1671,6 +1689,13 @@ class xWundergroundSettingsDisplay:public xDisplay{
   void update();
 };
 
+class xWundergroundEditStationActiveDisplay:public xDisplay{
+  void init();
+  void update();
+  void saveDisplay();
+  YNField _WundergroundStationActive;
+};
+
 class xWundergroundEditStationNameDisplay:public xDisplay{
   void init();
   void update();
@@ -1705,6 +1730,7 @@ xInterfacesDisplay InterfaceSettingsDisplay;
 xWundergroundSettingsDisplay WundergroundSettingsDisplay;
 xWundergroundEditStationNameDisplay _xWundergroundEditStationNameDisplay;
 xWundergroundEditStationPasswordDisplay _xWundergroundEditStationPasswordDisplay;
+xWundergroundEditStationActiveDisplay _xWundergroundEditStationActiveDisplay;
 
 static void xDisplayTask(void* pvParameters) {
   DisplayQueue = xQueueCreate(2,sizeof(xDisplayEvent));
@@ -1752,6 +1778,7 @@ static void xDisplayTask(void* pvParameters) {
 void::xWundergroundSettingsDisplay::init(){
   TheMenu=&WundergroundSettingsMenu;
   WundergroundSettingsMenu.init();
+  WundergroundSettingsMenu.AddMenuItemFunction("Station Name",SetWundergroundEditActiveDisplay);
   WundergroundSettingsMenu.AddMenuItemFunction("Station Name",SetWundergroundEditNameDisplay);
   WundergroundSettingsMenu.AddMenuItemFunction("Station Password",SetWundergroundEditPasswordDisplay);
   up.button_press_handler=xUpMenuPress;
@@ -1887,7 +1914,56 @@ void SetWundergroundEditPasswordDisplay(){
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 
+void SetWundergroundEditActiveDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xWundergroundEditStationActiveDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
 void SaveTextField(){
   xMenuEvent.DisplayAction=DISPLAY_SAVE;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
+
+void xUpPressYN(){
+  TheDisplay->TheYNField->next();
+  xMenuEvent.DisplayAction=DISPLAY_UPDATE;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void xDownPressYN(){
+  TheDisplay->TheYNField->next();
+  xMenuEvent.DisplayAction=DISPLAY_UPDATE;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void xEnterPressYN(){
+  xMenuEvent.DisplayAction=DISPLAY_SAVE;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void SaveYNField(){
+
+}
+
+void xWundergroundEditStationActiveDisplay::init(){
+  TheDisplay->TheYNField=&_WundergroundStationActive;
+  _WundergroundStationActive.setField(WundergroundInfceEnable);
+  up.button_press_handler=xUpPressYN;
+  down.button_press_handler=xDownPressYN;
+  enter.button_press_handler=xEnterPressYN;
+}
+
+void xWundergroundEditStationActiveDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  oled.print("Active: ");
+  _WundergroundStationActive.display();
+  oled.display();
+}
+
+void xWundergroundEditStationActiveDisplay::saveDisplay(){
+  WundergroundInfceEnable=TheDisplay->TheYNField->YN;
+  SaveWundergroundCredentials();
+}
+
