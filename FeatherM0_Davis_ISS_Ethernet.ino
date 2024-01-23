@@ -1459,8 +1459,15 @@ class TextField : public xDisplayItem{
     void display();
 };
 
-class xDisplay {
+class YNField : public xDisplayItem{
+  public:
+    bool YN = false;
+    void setField(bool _yn);
+    void next();
+    void display();
+};
 
+class xDisplay {
   public:
     xDisplayItem *CurrentDisplayItem;
     int _currentDisplayItem;
@@ -1563,7 +1570,7 @@ void TextField::previousChar(){
 }
 
 void TextField::enterChar(){
-  if(CharList[currentchar]==' '){    
+  if(CharList[currentchar]==' '){
     SaveTextField();}
   else {
     if(index+1<=64){
@@ -1705,7 +1712,7 @@ static void xDisplayTask(void* pvParameters) {
   DisplayEvent.DisplayAction=DISPLAY_UPDATE;
   xQueueSend(DisplayQueue,&DisplayEvent, 1000);
   while (true) {
-    //try to get time from RTC
+  //try to get time from RTC
   if(xQueuePeek(DisplayQueue, &DisplayEvent, 10000)==pdTRUE){
     if (xSemaphoreTake(I2CBusSemaphore, 5)) {
       now = rtc.now();
