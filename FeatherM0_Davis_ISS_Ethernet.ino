@@ -73,7 +73,6 @@
 #define WundergroundStationIDLength 64
 #define WundergroundStationIDPassword 64
 
-
 #include <Adafruit_FeatherOLED.h>
 #include <Adafruit_SSD1306.h>
 
@@ -251,12 +250,34 @@ static void xUpdateWundergroundInfce(void* pvParameters);  // Must be called in 
 DavisRFM69 radio(RFM69_CS, 3, true, 3);
 
 // id, type, active
-Station stations[1] = {
+Station stations[8] = {
   { .id = 0,
     .type = STYPE_VUE,
-    .active = true }
+    .active = true},
+      { .id = 1,
+    .type = STYPE_VUE,
+    .active = false},
+      { .id = 2,
+    .type = STYPE_VUE,
+    .active = false},
+      { .id = 3,
+    .type = STYPE_VUE,
+    .active = false },
+      { .id = 4,
+    .type = STYPE_VUE,
+    .active = false },
+      { .id = 5,
+    .type = STYPE_VUE,
+    .active = false },
+      { .id = 6,
+    .type = STYPE_VUE,
+    .active = false },
+      { .id = 7,
+    .type = STYPE_VUE,
+    .active = false },
 };
 
+int stationSel = 0;
 
 // RTC Definitions
 #ifdef _USE_DS3231
@@ -625,7 +646,7 @@ void decode_packet(RadioData* rd) {
 void printHex(volatile byte* packet, byte len) {
   for (byte i = 0; i < len; i++) {
     if (!(packet[i] & 0xf0)) Serial.print('0');
-    Serial.print(packet[i], HEX);
+      Serial.print(packet[i], HEX);
     if (i < len - 1) Serial.print('-');
   }
 }
@@ -1372,8 +1393,12 @@ class xMenu : public xDisplayItem {
     virtual void xMenuEnter();
     bool isMenu(){return true;}
     friend class xMenuItem;
+    int getSel();
 };
 
+int xMenu::getSel(){
+  return sel;
+}
 void xMenu::init(){
   for(int i=0;i<8;i++){
     MenuItems[i].text = "";
@@ -1444,9 +1469,9 @@ void xMenu::AddMenuItemSubmenu(String _text, xMenu *_SubMenu){
   }
 }
 
-#define MaxCharList 38
+#define MaxCharList 39
 
-const char CharList[MaxCharList] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9','<','>'};
+const char CharList[MaxCharList] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9','<','>',' '};
 
 class TextField : public xDisplayItem{
   public:
@@ -1484,11 +1509,69 @@ void YNField::setField(bool _yn){
   YN=_yn;
 }
 
+#ifndef CHOICETEXTLENGTH
+  #define CHOICETEXTLENGTH 32
+#endif
+#ifndef CHOICEITEMS
+  #define CHOICEITEMS 8
+#endif
+class Choice: public xDisplayItem{
+  struct choiceItem{
+    String text;
+  };
+    int numChoices=0;
+  public:
+    int sel=0;
+    void addChoice(String _text);
+    choiceItem choicelist[CHOICEITEMS];
+    void nextChoice();
+    void prevChoice();
+    void enterChoice();
+    void display();
+    void init();
+};
+
+void Choice::init(){
+  for(int i=0;i<CHOICEITEMS;i++){
+    choicelist[i].text="";
+    sel=0;
+    numChoices=0;
+  }
+}
+
+void Choice::addChoice(String _text){
+  if(numChoices+1<CHOICEITEMS){
+    choicelist[numChoices].text=_text;
+    numChoices++;
+  }
+}
+
+void Choice::nextChoice(){
+  if(sel+1<numChoices){
+    sel++;
+  }
+}
+
+void Choice::prevChoice(){
+  if(sel-1>=0){
+    sel--;
+  }
+}
+
+void Choice::enterChoice(){
+
+}
+
+void Choice::display(){
+  oled.print(choicelist[sel].text);
+}
+
 class xDisplay {
   public:
     xDisplayItem *CurrentDisplayItem;
     int _currentDisplayItem;
     xMenu *TheMenu;
+    Choice *TheChoice;
     TextField *TheTextField;
     YNField *TheYNField;
     bool AddDisplayItem(xDisplayItem *displayItem);
@@ -1572,7 +1655,6 @@ void TextField::display(){
     else
      oled.print(InputString[i]);
   }
-
 }
 
 void TextField::nextChar(){
@@ -1612,7 +1694,7 @@ void xMainMenuDisplay::init(){
   TheMenu = &MainMenu;
   MainMenu.init();
   MainMenu.AddMenuItemFunction("Network Status",SetNetworkStatusDisplay);
-  MainMenu.AddMenuItemFunction("Stations",SetNetworkStatusDisplay);
+  MainMenu.AddMenuItemFunction("Stations",OpenEditStationMenu);
   MainMenu.AddMenuItemFunction("Sensors",SetNetworkStatusDisplay);
   MainMenu.AddMenuItemFunction("Interfaces",SetInterfacesDisplay);
   MainMenu.AddMenuItemFunction("Settings",SetSettingsDisplay);
@@ -1711,13 +1793,124 @@ class xWundergroundEditStationPasswordDisplay:public xDisplay{
 };
 
 void xWundergroundEditStationNameDisplay::saveDisplay(){
+  memcpy(WundergroundStationID,_WundergroundStationName.InputString,WundergroundStationIDLength);
   SaveWundergroundCredentials();
   SetDefaultDisplay();
 }
 
 void xWundergroundEditStationPasswordDisplay::saveDisplay(){
+  memcpy(WundergroundStationPassword,_WundergroundStationPassword.InputString,WundergroundStationIDLength);
   SaveWundergroundCredentials();
   SetDefaultDisplay();
+}
+
+class xWXStationMenu:public xDisplay{
+  public: 
+  xMenu WXStationList;
+  void init();
+  void update();
+  void saveDisplay();
+};
+
+void xWXStationMenu::init(){
+  TheMenu=&WXStationList;
+  WXStationList.AddMenuItemFunction("Station 1",OpenEditStationDisplay);
+  WXStationList.AddMenuItemFunction("Station 2",OpenEditStationDisplay);
+  WXStationList.AddMenuItemFunction("Station 3",OpenEditStationDisplay);
+  WXStationList.AddMenuItemFunction("Station 4",OpenEditStationDisplay);
+  WXStationList.AddMenuItemFunction("Station 5",OpenEditStationDisplay);
+  WXStationList.AddMenuItemFunction("Station 6",OpenEditStationDisplay);
+  WXStationList.AddMenuItemFunction("Station 7",OpenEditStationDisplay);
+  WXStationList.AddMenuItemFunction("Station 8",OpenEditStationDisplay);
+  up.button_press_handler=xUpMenuPress;
+  down.button_press_handler=xDownMenuPress;
+  enter.button_press_handler=xEnterMenuPress;
+}
+
+void xWXStationMenu::update(){
+  WXStationList.display();
+}
+
+void xWXStationMenu::saveDisplay(){
+
+}
+
+class xEditDavisStationDisplay:public xDisplay{
+  xMenu DavisStationMenu;
+  void init();
+  void update();
+  void saveDisplay();
+};
+
+void xEditDavisStationDisplay::init(){
+  TheMenu=&DavisStationMenu;
+  DavisStationMenu.AddMenuItemFunction("Active",OpenEditDavisStationActiveDisplay);
+//  DavisStationMenu.AddMenuItemFunction("Sensors",OpenEditDavisStationSensorsDisplay);
+  up.button_press_handler=xUpMenuPress;
+  down.button_press_handler=xDownMenuPress;
+  enter.button_press_handler=xEnterMenuPress;
+}
+
+  void xEditDavisStationDisplay::update(){
+    oled.clearDisplay();
+    oled.setCursor(0, 0);
+    DavisStationMenu.display();
+    oled.display();
+  }
+
+  void xEditDavisStationDisplay::saveDisplay(){}
+
+class xEditDavisStationActiveDisplay:public xDisplay{
+  public:
+    YNField _DavisStationActive;
+    void init();
+    void update();
+    void saveDisplay();
+};
+
+void xEditDavisStationActiveDisplay::init(){
+  TheYNField=&_DavisStationActive;
+  up.button_press_handler=xUpPressYN;
+  down.button_press_handler=xDownPressYN;
+  enter.button_press_handler=xEnterPressYN;
+  _DavisStationActive.YN=stations[stationSel].active;
+
+}
+
+void xEditDavisStationActiveDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  oled.print("Active: ");
+  _DavisStationActive.display();
+  oled.display();
+}
+
+void xEditDavisStationActiveDisplay::saveDisplay(){
+
+}
+
+class xEditDavisStationSensorsDisplay:public xDisplay{
+};
+
+class xEditStationSensorsMenu:public xDisplay{
+  xMenu StationSensorsMenu;
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+
+void xEditStationSensorsMenu::init(){
+  TheMenu=&StationSensorsMenu;
+ // StationSensorsMenu.
+}
+
+void xEditStationSensorsMenu::update(){
+
+}
+
+void xEditStationSensorsMenu::saveDisplay(){
+
 }
 
 xDisplay *TheDisplay;
@@ -1731,6 +1924,10 @@ xWundergroundSettingsDisplay WundergroundSettingsDisplay;
 xWundergroundEditStationNameDisplay _xWundergroundEditStationNameDisplay;
 xWundergroundEditStationPasswordDisplay _xWundergroundEditStationPasswordDisplay;
 xWundergroundEditStationActiveDisplay _xWundergroundEditStationActiveDisplay;
+xWXStationMenu _xWXStationMenu;
+xEditDavisStationDisplay _xEditDavisStationDisplay;
+xEditDavisStationActiveDisplay _xEditDavisStationActiveDisplay;
+xEditStationSensorsMenu _xEditStationSensorsMenu;
 
 static void xDisplayTask(void* pvParameters) {
   DisplayQueue = xQueueCreate(2,sizeof(xDisplayEvent));
@@ -1781,6 +1978,7 @@ void::xWundergroundSettingsDisplay::init(){
   WundergroundSettingsMenu.AddMenuItemFunction("Station Active",SetWundergroundEditActiveDisplay);
   WundergroundSettingsMenu.AddMenuItemFunction("Station Name",SetWundergroundEditNameDisplay);
   WundergroundSettingsMenu.AddMenuItemFunction("Station Password",SetWundergroundEditPasswordDisplay);
+  WundergroundSettingsMenu.AddMenuItemFunction("Station Sensors",SetWundergroundEditPasswordDisplay);
   up.button_press_handler=xUpMenuPress;
   down.button_press_handler=xDownMenuPress;
   enter.button_press_handler=xEnterMenuPress;
@@ -1965,5 +2163,48 @@ void xWundergroundEditStationActiveDisplay::update(){
 void xWundergroundEditStationActiveDisplay::saveDisplay(){
   WundergroundInfceEnable=TheDisplay->TheYNField->YN;
   SaveWundergroundCredentials();
+  SetDefaultDisplay();
 }
 
+void xUpPressChoice(){
+  TheDisplay->TheChoice->prevChoice();
+  xMenuEvent.DisplayAction=DISPLAY_UPDATE;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void xDownPressChoice(){
+  TheDisplay->TheChoice->nextChoice();
+  xMenuEvent.DisplayAction=DISPLAY_UPDATE;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void xEnterPressChoice(){
+  TheDisplay->TheChoice->enterChoice();
+  xMenuEvent.DisplayAction=DISPLAY_SAVE;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void OpenEditStationMenu(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xWXStationMenu;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void OpenEditStationDisplay(){
+  stationSel=_xWXStationMenu.WXStationList.getSel(); 
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditDavisStationDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void OpenEditDavisStationActiveDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditDavisStationActiveDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void OpenEditDavisStationSensorsDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditDavisStationDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
