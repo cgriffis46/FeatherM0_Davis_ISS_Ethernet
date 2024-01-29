@@ -1518,6 +1518,10 @@ void YNField::setField(bool _yn){
   YN=_yn;
 }
 
+
+/*
+  @brief CHOICE field definition
+*/
 #ifndef CHOICETEXTLENGTH
   #define CHOICETEXTLENGTH 32
 #endif
@@ -1533,9 +1537,9 @@ class Choice: public xDisplayItem{
     int sel=0;
     void addChoice(String _text);
     choiceItem choicelist[CHOICEITEMS];
-    void nextChoice();
-    void prevChoice();
-    void enterChoice();
+    void nextChoice(); 
+    void prevChoice(); 
+    void enterChoice(); 
     void display();
     void init();
 };
@@ -1575,6 +1579,10 @@ void Choice::display(){
   oled.print(choicelist[sel].text);
 }
 
+/*
+  @brief XDisplay Class Definition. User will define .init() and .update() functions. 
+    update() will draw the display. .init() will setup any display fields. 
+*/
 class xDisplay {
   public:
     xDisplayItem *CurrentDisplayItem;
@@ -1757,6 +1765,10 @@ void xSettingsDisplay::update(){
     TheMenu->display();
 }
 
+/*
+@class xInterfacesDisplay
+@brief Interface Settings Menu. User will choose which Interface to edit. 
+*/
 class xInterfacesDisplay:public xDisplay{
   xMenu InterfaceSettingsMenu;
   void init();
@@ -1777,6 +1789,7 @@ void xInterfacesDisplay::update(){
 }
 
 /*
+  @class xWundergroundSettingsDisplay
   @brief Wunderground Interface Settings Menu
 */
 class xWundergroundSettingsDisplay:public xDisplay{
@@ -1834,6 +1847,10 @@ void xWundergroundEditStationPasswordDisplay::saveDisplay(){
   SetDefaultDisplay();
 }
 
+/*
+  @class xWundergroundEditStationNameDisplay
+  @brief Default the Wunderground Interface Station Name field to WundergroundStationID
+*/
 void xWundergroundEditStationNameDisplay::init(){
   TheTextField=&_WundergroundStationName;
   memcpy(_WundergroundStationName.InputString,WundergroundStationID,64);
@@ -1841,14 +1858,21 @@ void xWundergroundEditStationNameDisplay::init(){
   down.button_press_handler=xDownTextfieldPress;
   enter.button_press_handler=xEnterTextfieldPress;
 }
-
+/*
+  @class xWundergroundEditStationNameDisplay
+  @brief Draws the Wunderground Interface Edit Station Name display 
+*/
 void xWundergroundEditStationNameDisplay::update(){
   oled.clearDisplay();
   oled.setCursor(0, 0);
   _WundergroundStationName.display();
   oled.display();
 }
-
+/*
+  @class xWundergroundEditStationPasswordDisplay
+  @brief Init function for xWundergroundEditStationPasswordDisplay class. 
+    Default to WundergroundStationPassword
+*/
 void xWundergroundEditStationPasswordDisplay::init(){
   TheTextField=&_WundergroundStationPassword;
   memcpy(_WundergroundStationPassword.InputString,WundergroundStationPassword,64);
@@ -1858,6 +1882,7 @@ void xWundergroundEditStationPasswordDisplay::init(){
 }
 
 /* 
+  @class xWundergroundEditStationPasswordDisplay
   @brief Draw the xWundergroundEditStationPasswordDisplay
  */
 void xWundergroundEditStationPasswordDisplay::update(){
@@ -1958,6 +1983,9 @@ void xEditDavisStationActiveDisplay::saveDisplay(){
 class xEditDavisStationSensorsDisplay:public xDisplay{
 };
 
+/*
+  @brief E
+*/
 class xEditStationSensorsMenu:public xDisplay{
   xMenu StationSensorsMenu;
     public:
@@ -2044,10 +2072,10 @@ void xEditWundergroundHumidityDisplay::update(){
 
 void xEditWundergroundHumidityDisplay::saveDisplay(){}
 
-void OpenEditWundergroundEditHumidityActiveDisplay(){} 
-void OpenEditWundergroundEditHumidityStationChoiceDisplay(){}
-void OpenEditWundergroundEditHumidityStationSensorChoiceDisplay(){} 
-
+/*
+  @class xEditWundergroundHumidityActiveDisplay
+  @brief Sets QueueHumidityForInterfaces
+*/
 class xEditWundergroundHumidityActiveDisplay:public xDisplay{
   YNField _Wunderground_Humidity_Sensor_Active;
     public:
@@ -2058,6 +2086,7 @@ class xEditWundergroundHumidityActiveDisplay:public xDisplay{
 
 void xEditWundergroundHumidityActiveDisplay::init(){
   TheYNField = &_Wunderground_Humidity_Sensor_Active;
+  _Wunderground_Humidity_Sensor_Active.YN=QueueHumidityForInterfaces;
   up.button_press_handler=xUpPressYN;
   down.button_press_handler=xDownPressYN;
   enter.button_press_handler=xEnterPressYN;
@@ -2071,6 +2100,8 @@ void xEditWundergroundHumidityActiveDisplay::update(){
 }
 
 void xEditWundergroundHumidityActiveDisplay::saveDisplay(){
+  QueueHumidityForInterfaces=_Wunderground_Humidity_Sensor_Active.YN;
+  saveHumidityToDisk();
   SetDefaultDisplay();
 }
 
@@ -2101,6 +2132,7 @@ class xEditWundergroundThermometerDisplay:public xDisplay{
 void xEditWundergroundThermometerDisplay::init(){}
 void xEditWundergroundThermometerDisplay::update(){}
 void xEditWundergroundThermometerDisplay::saveDisplay(){
+//  saveThermometerToDisk();
   SetDefaultDisplay();
 }
 
@@ -2114,6 +2146,7 @@ class xEditWundergroundWindDirectionDisplay:public xDisplay{
 void xEditWundergroundWindDirectionDisplay::init(){}
 void xEditWundergroundWindDirectionDisplay::update(){}
 void xEditWundergroundWindDirectionDisplay::saveDisplay(){
+  
   SetDefaultDisplay();
 }
 
@@ -2138,6 +2171,8 @@ xWundergroundEditStationNameDisplay _xWundergroundEditStationNameDisplay;
 xWundergroundEditStationPasswordDisplay _xWundergroundEditStationPasswordDisplay;
 xWundergroundEditStationActiveDisplay _xWundergroundEditStationActiveDisplay;
 xEditWundergroundHumidityDisplay _xEditWundergroundHumidityDisplay;
+xEditWundergroundHumidityActiveDisplay _xEditWundergroundHumidityActiveDisplay;
+
 xEditWundergroundAnemometerDisplay _xEditWundergroundAnemometerDisplay;
 xEditWundergroundThermometerDisplay _xEditWundergroundThermometerDisplay;
 xEditWundergroundWindDirectionDisplay _xEditWundergroundWindDirectionDisplay;
@@ -2445,3 +2480,19 @@ void OpenEditWundergroundEditPressureSensorDisplay(){
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 
+void OpenEditWundergroundEditHumidityActiveDisplay(){
+    xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditWundergroundHumidityActiveDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+void OpenEditWundergroundEditHumidityStationChoiceDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditDavisStationDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+void OpenEditWundergroundEditHumidityStationSensorChoiceDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditDavisStationDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+} 

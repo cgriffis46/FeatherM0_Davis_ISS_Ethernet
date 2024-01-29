@@ -133,7 +133,6 @@ void saveCredentials() {
 
 */
 
-/*
 void saveSensorsToDisk(){
   uint32_t address;
   char ok[2 + 1];
@@ -193,8 +192,6 @@ void saveSensorsToDisk(){
 
 }
 
-*/
-/*
 void LoadSensorsFromDisk(){
   char ok[2 + 1];
   uint8_t enable = 0;
@@ -298,9 +295,6 @@ void LoadSensorsFromDisk(){
   }
 
 }
-*/
-
-/*
 
 void saveThermometerToDisk(){
   uint32_t address;
@@ -367,10 +361,6 @@ void saveThermometerToDisk(){
 
 }
 
-*/
-
-/*
-
 void saveHumidityToDisk(){
   uint32_t address;
   char ok[2 + 1];
@@ -406,8 +396,6 @@ void saveHumidityToDisk(){
     #endif
     }
 }
-
-*/
 
 void RestoreDefaults(){
   uint32_t address;
@@ -501,3 +489,4 @@ void SaveDeviceCredentials(){
 }
 
 */
+
