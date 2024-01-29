@@ -7,7 +7,7 @@
 
 
 #ifdef USE_WUNDERGROUND_INFCE
-#define _DEBUG_WU_INFCE true
+//#define _DEBUG_WU_INFCE true
 #include "WundergroundInfce.h"
 #include <Ethernet.h>
 char buffer[256];

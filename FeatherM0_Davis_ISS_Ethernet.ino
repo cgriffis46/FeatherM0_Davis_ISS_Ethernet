@@ -2040,7 +2040,7 @@ void xEditWundergroundSensorsMenu::saveDisplay(){
 }
 
 /*
-  Edit Humidity Sensor for Wunderground Interface
+  Wunderground Interface Humidity Sensor Settings Menu
 */
 
 class xEditWundergroundHumidityDisplay:public xDisplay{
@@ -2218,6 +2218,66 @@ void xEditWundergroundWindDirectionDisplay::update(){
 void xEditWundergroundWindDirectionDisplay::saveDisplay(){
   SetDefaultDisplay();
 }
+/*
+  @class xEditWundergroundRainGaugeSettingsMenu
+  @brief Wunderground Interface Rain Gauge Settings Menu
+*/
+class xEditWundergroundRainGaugeSettingsMenu:public xDisplay{
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+void xEditWundergroundRainGaugeSettingsMenu::init(){}
+void xEditWundergroundRainGaugeSettingsMenu::update(){}
+void xEditWundergroundRainGaugeSettingsMenu::saveDisplay(){}
+/*
+  @class xEditWundergroundRainGaugeSettingsActiveDisplay
+  @brief Wunderground Interface Rain Gauge Settings Active YN 
+*/
+class xEditWundergroundRainGaugeSettingsActiveDisplay:public xDisplay{
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+void xEditWundergroundRainGaugeSettingsActiveDisplay::init(){}
+void xEditWundergroundRainGaugeSettingsActiveDisplay::update(){}
+void xEditWundergroundRainGaugeSettingsActiveDisplay::saveDisplay(){}
+
+class xEditWundergroundRainGaugeSettingsStationChoiceDisplay:public xDisplay{
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+
+void xEditWundergroundRainGaugeSettingsStationChoiceDisplay::init(){}
+void xEditWundergroundRainGaugeSettingsStationChoiceDisplay::update(){}
+void xEditWundergroundRainGaugeSettingsStationChoiceDisplay::saveDisplay(){}
+
+class xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay:public xDisplay{
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+void xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay::init(){}
+void xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay::update(){}
+void xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay::saveDisplay(){}
+
+void OpenEditWundergroundRainGaugeSettingsMenu(){
+}
+void OpenEditWundergroundRainGaugeSettingsActiveDisplay(){
+}
+void OpenEditWundergroundRainGaugeSettingsStationChoiceDisplay(){
+}
+void OpenEditWundergroundRainGaugeSettingsSensorChoiceDisplay(){
+}
+xEditWundergroundRainGaugeSettingsMenu _xEditWundergroundRainGaugeSettingsMenu;
+xEditWundergroundRainGaugeSettingsActiveDisplay _xEditWundergroundRainGaugeSettingsActiveDisplay;
+xEditWundergroundRainGaugeSettingsStationChoiceDisplay _xEditWundergroundRainGaugeSettingsStationChoiceDisplay;
+xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay _xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay;
 
 /*
   @brief xDisplay definitions
@@ -2357,12 +2417,10 @@ void xUpMenuPress(){
   TheDisplay->TheMenu->xMenuUp();
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
-
 void xDownMenuPress(){
   TheDisplay->TheMenu->xMenuDown();
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
-
 void xEnterMenuPress(){
   TheDisplay->TheMenu->xMenuEnter();}
 /* End MENU Button Handlers*/
@@ -2373,15 +2431,17 @@ void xEnterMenuPress(){
 void xUpTextfieldPress(){
   TheDisplay->TheTextField->previousChar();
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
-  xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
-
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
 void xDownTextfieldPress(){
   TheDisplay->TheTextField->nextChar();
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
-  xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
 
 void xEnterTextfieldPress(){
-  TheDisplay->TheTextField->enterChar();}
+  TheDisplay->TheTextField->enterChar();
+}
 
 void SaveTextField(){
   xMenuEvent.DisplayAction=DISPLAY_SAVE;
@@ -2543,7 +2603,7 @@ void OpenEditDavisStationSensorsDisplay(){
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
-  Code to open Edit Wunderground Interface displays
+  @brief Code to open Edit Wunderground Interface displays
 */
 void OpenEditWundergroundSensorsMenu(){
       xMenuEvent.DisplayAction=DISPLAY_SET;
@@ -2593,7 +2653,7 @@ void OpenEditWundergroundEditPressureSensorDisplay(){
 }
 
 void OpenEditWundergroundEditHumidityActiveDisplay(){
-    xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xEditWundergroundHumidityActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
@@ -2612,7 +2672,7 @@ void OpenEditWundergroundEditHumidityStationSensorChoiceDisplay(){
   @brief Wunderground Interface settings display - thermometer active. 
 */
 void OpenEditWundergroundThermometerActiveDisplay(){
-    xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xEditWundergroundThermometerActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
@@ -2622,7 +2682,7 @@ void OpenEditWundergroundThermometerStationDisplay(){
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 void OpenEditWundergroundThermometerSensorDisplay(){
-    xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xEditWundergroundHumidityActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
