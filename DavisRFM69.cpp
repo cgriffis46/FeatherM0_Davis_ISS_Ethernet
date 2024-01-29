@@ -201,8 +201,6 @@ void DavisRFM69::initialize(byte freqBand) {
 }
 
 void DavisRFM69::stopReceiver() {
-  //Timer1.detachInterrupt();
-  //zt.enable(false);
   setMode(RF69_MODE_SLEEP);
   mode = SM_IDLE;
 }
@@ -374,6 +372,7 @@ void DavisRFM69::loop() {
       }
     }
   }
+
 /*
   if (all_sync) {
     mode = SM_SYNCHRONIZED;

@@ -247,6 +247,15 @@ static void xUpdateWundergroundInfce(void* pvParameters);  // Must be called in 
 #define RFM69_TIMEOUT 12
 #define LED 13
 
+#define mem_Davis_Station_0_Active (uint32_t)0x0210
+#define mem_Davis_Station_1_Active (uint32_t)0x0220
+#define mem_Davis_Station_2_Active (uint32_t)0x0230
+#define mem_Davis_Station_3_Active (uint32_t)0x0240
+#define mem_Davis_Station_4_Active (uint32_t)0x0250
+#define mem_Davis_Station_5_Active (uint32_t)0x0260
+#define mem_Davis_Station_6_Active (uint32_t)0x0270
+#define mem_Davis_Station_7_Active (uint32_t)0x0280
+
 DavisRFM69 radio(RFM69_CS, 3, true, 3);
 
 // id, type, active
@@ -1680,12 +1689,11 @@ void TextField::enterChar(){
   Serial.println(index);
 }
 
-xMenu MainMenu;
-xMenu SettingsMenu;
-xMenu InterfaceSettingsMenu;
-xMenu WundergroundSettingsMenu;
-
+/*
+  @brief The Main Menu
+*/
 class xMainMenuDisplay:public xDisplay{
+  xMenu MainMenu;
   void init();
   void update();
 };
@@ -1706,7 +1714,7 @@ void xMainMenuDisplay::init(){
 }
 
 void xMainMenuDisplay::update(){
-  TheMenu->display();
+  MainMenu.display();
   //Serial.println("MainMenuDisplay");
 }
 
@@ -1729,6 +1737,7 @@ void xNetStatusDisplay::update(){
 }
 
 class xSettingsDisplay:public xDisplay{
+  xMenu SettingsMenu;
   void init();
   void update();
 };
@@ -1749,6 +1758,7 @@ void xSettingsDisplay::update(){
 }
 
 class xInterfacesDisplay:public xDisplay{
+  xMenu InterfaceSettingsMenu;
   void init();
   void update();
 };
@@ -1766,10 +1776,30 @@ void xInterfacesDisplay::update(){
   TheMenu->display();
 }
 
+/*
+  @brief Wunderground Interface Settings Menu
+*/
 class xWundergroundSettingsDisplay:public xDisplay{
+  xMenu WundergroundSettingsMenu;
   void init();
   void update();
 };
+
+void xWundergroundSettingsDisplay::init(){
+  TheMenu=&WundergroundSettingsMenu;
+  WundergroundSettingsMenu.init();
+  WundergroundSettingsMenu.AddMenuItemFunction("Station Active",SetWundergroundEditActiveDisplay);
+  WundergroundSettingsMenu.AddMenuItemFunction("Station Name",SetWundergroundEditNameDisplay);
+  WundergroundSettingsMenu.AddMenuItemFunction("Station Password",SetWundergroundEditPasswordDisplay);
+  WundergroundSettingsMenu.AddMenuItemFunction("Station Sensors",SetWundergroundEditPasswordDisplay);
+  up.button_press_handler=xUpMenuPress;
+  down.button_press_handler=xDownMenuPress;
+  enter.button_press_handler=xEnterMenuPress;
+}
+
+void xWundergroundSettingsDisplay::update(){
+  TheMenu->display();
+}
 
 class xWundergroundEditStationActiveDisplay:public xDisplay{
   void init();
@@ -1804,6 +1834,43 @@ void xWundergroundEditStationPasswordDisplay::saveDisplay(){
   SetDefaultDisplay();
 }
 
+void xWundergroundEditStationNameDisplay::init(){
+  TheTextField=&_WundergroundStationName;
+  memcpy(_WundergroundStationName.InputString,WundergroundStationID,64);
+  up.button_press_handler=xUpTextfieldPress;
+  down.button_press_handler=xDownTextfieldPress;
+  enter.button_press_handler=xEnterTextfieldPress;
+}
+
+void xWundergroundEditStationNameDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  _WundergroundStationName.display();
+  oled.display();
+}
+
+void xWundergroundEditStationPasswordDisplay::init(){
+  TheTextField=&_WundergroundStationPassword;
+  memcpy(_WundergroundStationPassword.InputString,WundergroundStationPassword,64);
+  up.button_press_handler=xUpTextfieldPress;
+  down.button_press_handler=xDownTextfieldPress;
+  enter.button_press_handler=xEnterTextfieldPress;
+}
+
+/* 
+  @brief Draw the xWundergroundEditStationPasswordDisplay
+ */
+void xWundergroundEditStationPasswordDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  _WundergroundStationPassword.display();
+  oled.display();
+}
+
+
+/*
+  @brief Edit Davis Station list 
+*/
 class xWXStationMenu:public xDisplay{
   public: 
   xMenu WXStationList;
@@ -1886,7 +1953,6 @@ void xEditDavisStationActiveDisplay::update(){
 }
 
 void xEditDavisStationActiveDisplay::saveDisplay(){
-
 }
 
 class xEditDavisStationSensorsDisplay:public xDisplay{
@@ -1906,28 +1972,175 @@ void xEditStationSensorsMenu::init(){
 }
 
 void xEditStationSensorsMenu::update(){
-
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  StationSensorsMenu.display();
+  oled.display();
 }
 
 void xEditStationSensorsMenu::saveDisplay(){
 
 }
 
-xDisplay *TheDisplay;
-xDisplayEvent DisplayEvent;
+/*
+  @brief Wunderground Interface Sensor Menu. Lets the user choose which Stations and Sensors to use for the Wunderground interface. 
+*/
+class xEditWundergroundSensorsMenu: public xDisplay{
+  xMenu WundergroundSensorsMenu;
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+
+void xEditWundergroundSensorsMenu::init(){
+      TheMenu=&WundergroundSensorsMenu;
+      WundergroundSensorsMenu.AddMenuItemFunction("Thermometer Station: ",OpenEditWundergroundEditTemperatureSensorDisplay);
+      WundergroundSensorsMenu.AddMenuItemFunction("Humidity Station: ",OpenEditWundergroundEditHumiditySensorDisplay);
+//      WundergroundSensorsMenu.AddMenuItemFunction("Anemometer Station: ",OpenEditWundergroundAnemometerDisplay);
+//      WundergroundSensorsMenu.AddMenuItemFunction("Wind Direction Station: ",OpenEditWundergroundWindDirectionSensorDisplay);
+      //WundergroundSensorsMenu.AddMenuItemFunction("Barometric Pressure Station: ",);
+    up.button_press_handler=xUpMenuPress;
+    down.button_press_handler=xDownMenuPress;
+    enter.button_press_handler=xEnterMenuPress;
+    }
+
+void xEditWundergroundSensorsMenu::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  WundergroundSensorsMenu.display();
+  oled.display();
+}
+
+void xEditWundergroundSensorsMenu::saveDisplay(){
+  SetDefaultDisplay();
+}
+
+/*
+  Edit Humidity Sensor for Wunderground Interface
+*/
+
+class xEditWundergroundHumidityDisplay:public xDisplay{
+  xMenu WundergroundHumiditySensorMenu;
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+
+void xEditWundergroundHumidityDisplay::init(){
+  TheMenu=&WundergroundHumiditySensorMenu;
+  WundergroundHumiditySensorMenu.AddMenuItemFunction("Active: ",OpenEditWundergroundEditHumidityActiveDisplay);
+  WundergroundHumiditySensorMenu.AddMenuItemFunction("Station: ",OpenEditWundergroundEditHumidityStationChoiceDisplay);
+  WundergroundHumiditySensorMenu.AddMenuItemFunction("Sensor: ",OpenEditWundergroundEditHumidityStationSensorChoiceDisplay);
+}
+
+void xEditWundergroundHumidityDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  WundergroundHumiditySensorMenu.display();
+  oled.display();
+}
+
+void xEditWundergroundHumidityDisplay::saveDisplay(){}
+
+void OpenEditWundergroundEditHumidityActiveDisplay(){} 
+void OpenEditWundergroundEditHumidityStationChoiceDisplay(){}
+void OpenEditWundergroundEditHumidityStationSensorChoiceDisplay(){} 
+
+class xEditWundergroundHumidityActiveDisplay:public xDisplay{
+  YNField _Wunderground_Humidity_Sensor_Active;
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+
+void xEditWundergroundHumidityActiveDisplay::init(){
+  TheYNField = &_Wunderground_Humidity_Sensor_Active;
+  up.button_press_handler=xUpPressYN;
+  down.button_press_handler=xDownPressYN;
+  enter.button_press_handler=xEnterPressYN;
+}
+
+void xEditWundergroundHumidityActiveDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  _Wunderground_Humidity_Sensor_Active.display();
+  oled.display();
+}
+
+void xEditWundergroundHumidityActiveDisplay::saveDisplay(){
+  SetDefaultDisplay();
+}
+
+/*
+  Edit Wunderground Anemometer 
+*/
+
+class xEditWundergroundAnemometerDisplay:public xDisplay{
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+
+void xEditWundergroundAnemometerDisplay::init(){}
+void xEditWundergroundAnemometerDisplay::update(){}
+void xEditWundergroundAnemometerDisplay::saveDisplay(){
+  SetDefaultDisplay();
+}
+
+class xEditWundergroundThermometerDisplay:public xDisplay{
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+
+void xEditWundergroundThermometerDisplay::init(){}
+void xEditWundergroundThermometerDisplay::update(){}
+void xEditWundergroundThermometerDisplay::saveDisplay(){
+  SetDefaultDisplay();
+}
+
+class xEditWundergroundWindDirectionDisplay:public xDisplay{
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+
+void xEditWundergroundWindDirectionDisplay::init(){}
+void xEditWundergroundWindDirectionDisplay::update(){}
+void xEditWundergroundWindDirectionDisplay::saveDisplay(){
+  SetDefaultDisplay();
+}
+
+/*
+  @brief xDisplay definitions
+*/
+xDisplay *TheDisplay; // the Default display
+xDisplayEvent DisplayEvent; 
 xDefaultDisplay _DefaultDisplay;
-xMainMenuDisplay MainMenuDisplay;
+xMainMenuDisplay MainMenuDisplay; // Main Menu
 xNetStatusDisplay NetStatusDisplay;
-xSettingsDisplay SettingsDisplay;
-xInterfacesDisplay InterfaceSettingsDisplay;
-xWundergroundSettingsDisplay WundergroundSettingsDisplay; 
-xWundergroundEditStationNameDisplay _xWundergroundEditStationNameDisplay;
-xWundergroundEditStationPasswordDisplay _xWundergroundEditStationPasswordDisplay;
-xWundergroundEditStationActiveDisplay _xWundergroundEditStationActiveDisplay;
+xSettingsDisplay SettingsDisplay; // Settings Menu
+xInterfacesDisplay InterfaceSettingsDisplay; // Edit Interfaces Menu
 xWXStationMenu _xWXStationMenu;
 xEditDavisStationDisplay _xEditDavisStationDisplay;
 xEditDavisStationActiveDisplay _xEditDavisStationActiveDisplay;
 xEditStationSensorsMenu _xEditStationSensorsMenu;
+
+/* Wunderground Interface Display definitions*/
+xWundergroundSettingsDisplay WundergroundSettingsDisplay; 
+xWundergroundEditStationNameDisplay _xWundergroundEditStationNameDisplay;
+xWundergroundEditStationPasswordDisplay _xWundergroundEditStationPasswordDisplay;
+xWundergroundEditStationActiveDisplay _xWundergroundEditStationActiveDisplay;
+xEditWundergroundHumidityDisplay _xEditWundergroundHumidityDisplay;
+xEditWundergroundAnemometerDisplay _xEditWundergroundAnemometerDisplay;
+xEditWundergroundThermometerDisplay _xEditWundergroundThermometerDisplay;
+xEditWundergroundWindDirectionDisplay _xEditWundergroundWindDirectionDisplay;
 
 static void xDisplayTask(void* pvParameters) {
   DisplayQueue = xQueueCreate(2,sizeof(xDisplayEvent));
@@ -1972,54 +2185,11 @@ static void xDisplayTask(void* pvParameters) {
   }
 }
 
-void::xWundergroundSettingsDisplay::init(){
-  TheMenu=&WundergroundSettingsMenu;
-  WundergroundSettingsMenu.init();
-  WundergroundSettingsMenu.AddMenuItemFunction("Station Active",SetWundergroundEditActiveDisplay);
-  WundergroundSettingsMenu.AddMenuItemFunction("Station Name",SetWundergroundEditNameDisplay);
-  WundergroundSettingsMenu.AddMenuItemFunction("Station Password",SetWundergroundEditPasswordDisplay);
-  WundergroundSettingsMenu.AddMenuItemFunction("Station Sensors",SetWundergroundEditPasswordDisplay);
-  up.button_press_handler=xUpMenuPress;
-  down.button_press_handler=xDownMenuPress;
-  enter.button_press_handler=xEnterMenuPress;
-}
-
-void xWundergroundSettingsDisplay::update(){
-  TheMenu->display();
-}
-
-void xWundergroundEditStationNameDisplay::init(){
-  TheDisplay->TheTextField=&_WundergroundStationName;
-  memcpy(_WundergroundStationName.InputString,WundergroundStationID,64);
-  up.button_press_handler=xUpTextfieldPress;
-  down.button_press_handler=xDownTextfieldPress;
-  enter.button_press_handler=xEnterTextfieldPress;
-}
-
-void xWundergroundEditStationNameDisplay::update(){
-  oled.clearDisplay();
-  oled.setCursor(0, 0);
-  _WundergroundStationName.display();
-  oled.display();
-}
-
-void xWundergroundEditStationPasswordDisplay::init(){
-  TheDisplay->TheTextField=&_WundergroundStationPassword;
-  memcpy(_WundergroundStationPassword.InputString,WundergroundStationPassword,64);
-  up.button_press_handler=xUpTextfieldPress;
-  down.button_press_handler=xDownTextfieldPress;
-  enter.button_press_handler=xEnterTextfieldPress;
-}
-
-void xWundergroundEditStationPasswordDisplay::update(){
-  oled.clearDisplay();
-  oled.setCursor(0, 0);
-  _WundergroundStationPassword.display();
-  oled.display();
-}
-
 xDisplayEvent xMenuEvent;
 
+/*
+  @brief Default Button Handlers
+*/
 void xUpPress(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&MainMenuDisplay;
@@ -2046,7 +2216,11 @@ void xEnterPress(){
 void xEnterRelease(){
   Serial.println("Enter");
 }
+/* End default button handlers */
 
+/*
+  @brief Button handlers for the MENU type
+*/
 void xUpMenuPress(){
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
   TheDisplay->TheMenu->xMenuUp();
@@ -2060,7 +2234,11 @@ void xDownMenuPress(){
 
 void xEnterMenuPress(){
   TheDisplay->TheMenu->xMenuEnter();}
+/* End MENU Button Handlers*/
 
+/*
+  @brief Button handlers for the TEXT field 
+*/
 void xUpTextfieldPress(){
   TheDisplay->TheTextField->previousChar();
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
@@ -2073,6 +2251,12 @@ void xDownTextfieldPress(){
 
 void xEnterTextfieldPress(){
   TheDisplay->TheTextField->enterChar();}
+
+void SaveTextField(){
+  xMenuEvent.DisplayAction=DISPLAY_SAVE;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+/* End TEXT field Button Handlers */
 
 void SetDefaultDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
@@ -2118,10 +2302,9 @@ void SetWundergroundEditActiveDisplay(){
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 
-void SaveTextField(){
-  xMenuEvent.DisplayAction=DISPLAY_SAVE;
-  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
-}
+/*
+  @brief Button handlers for the YN field
+*/
 
 void xUpPressYN(){
   TheDisplay->TheYNField->next();
@@ -2143,6 +2326,7 @@ void xEnterPressYN(){
 void SaveYNField(){
 
 }
+/* End YN Field Button Handlers */
 
 void xWundergroundEditStationActiveDisplay::init(){
   TheDisplay->TheYNField=&_WundergroundStationActive;
@@ -2166,6 +2350,9 @@ void xWundergroundEditStationActiveDisplay::saveDisplay(){
   SetDefaultDisplay();
 }
 
+/* 
+  @brief Button Handlers for CHOICE field
+*/
 void xUpPressChoice(){
   TheDisplay->TheChoice->prevChoice();
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
@@ -2183,6 +2370,7 @@ void xEnterPressChoice(){
   xMenuEvent.DisplayAction=DISPLAY_SAVE;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
+/* End CHOICE */
 
 void OpenEditStationMenu(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
@@ -2196,15 +2384,64 @@ void OpenEditStationDisplay(){
   xMenuEvent.Display=&_xEditDavisStationDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
-
+/*
+  @brief Opens the Active: YN display for the Davis ISS station in stationSel
+*/
 void OpenEditDavisStationActiveDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xEditDavisStationActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
-
+/*
+  @brief Opens the Sensors menu display for the Davis ISS station in stationSel
+*/
 void OpenEditDavisStationSensorsDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xEditDavisStationDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
+/*
+  Code to open Edit Wunderground Interface displays
+*/
+/*
+  @brief Opens the menu for the Wunderground Interface Anemometer sensor
+*/
+void OpenEditWundergroundAnemometerDisplay(){
+    xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditWundergroundAnemometerDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+/*
+  @brief Opens the menu for the Wunderground Interface Wind Direction sensor
+*/
+void OpenEditWundergroundWindDirectionSensorDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditWundergroundWindDirectionDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+/*
+  @brief Opens the menu for the Wunderground Interface Temperature sensor  
+*/
+void OpenEditWundergroundEditTemperatureSensorDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditWundergroundThermometerDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+/*
+  @brief Opens the menu for the Wunderground Interface Humidity sensor  
+*/
+void OpenEditWundergroundEditHumiditySensorDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditWundergroundHumidityDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
+/*
+  @brief Opens the menu for the Wunderground Interface Pressure sensor  
+*/
+void OpenEditWundergroundEditPressureSensorDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditDavisStationDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
