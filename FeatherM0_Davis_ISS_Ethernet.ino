@@ -389,7 +389,7 @@ void setup() {
   Serial.println("Initialize NVRAM");
   if(fram.begin(0x50)){
      //loadCredentials();            // Load WLAN credentials from network
-     //LoadSensorsFromDisk();
+     LoadSensorsFromDisk();
      //RestoreDefaults();
      LoadWundergroundCredentials();// Load Wunderground Interface credentials
   }
@@ -1801,10 +1801,10 @@ class xWundergroundSettingsDisplay:public xDisplay{
 void xWundergroundSettingsDisplay::init(){
   TheMenu=&WundergroundSettingsMenu;
   WundergroundSettingsMenu.init();
-  WundergroundSettingsMenu.AddMenuItemFunction("Station Active",SetWundergroundEditActiveDisplay);
-  WundergroundSettingsMenu.AddMenuItemFunction("Station Name",SetWundergroundEditNameDisplay);
-  WundergroundSettingsMenu.AddMenuItemFunction("Station Password",SetWundergroundEditPasswordDisplay);
-  WundergroundSettingsMenu.AddMenuItemFunction("Station Sensors",SetWundergroundEditPasswordDisplay);
+  WundergroundSettingsMenu.AddMenuItemFunction("Wunderground Interface Active",SetWundergroundEditActiveDisplay);
+  WundergroundSettingsMenu.AddMenuItemFunction("Wunderground Interface Name",SetWundergroundEditNameDisplay);
+  WundergroundSettingsMenu.AddMenuItemFunction("Wunderground Interface Password",SetWundergroundEditPasswordDisplay);
+  WundergroundSettingsMenu.AddMenuItemFunction("Wunderground Interface Sensors",OpenEditWundergroundSensorsMenu);
   up.button_press_handler=xUpMenuPress;
   down.button_press_handler=xDownMenuPress;
   enter.button_press_handler=xEnterMenuPress;
@@ -2000,10 +2000,7 @@ void xEditStationSensorsMenu::init(){
 }
 
 void xEditStationSensorsMenu::update(){
-  oled.clearDisplay();
-  oled.setCursor(0, 0);
   StationSensorsMenu.display();
-  oled.display();
 }
 
 void xEditStationSensorsMenu::saveDisplay(){
@@ -2023,8 +2020,9 @@ class xEditWundergroundSensorsMenu: public xDisplay{
 
 void xEditWundergroundSensorsMenu::init(){
       TheMenu=&WundergroundSensorsMenu;
-      WundergroundSensorsMenu.AddMenuItemFunction("Thermometer Station: ",OpenEditWundergroundEditTemperatureSensorDisplay);
-      WundergroundSensorsMenu.AddMenuItemFunction("Humidity Station: ",OpenEditWundergroundEditHumiditySensorDisplay);
+      WundergroundSensorsMenu.init();
+      WundergroundSensorsMenu.AddMenuItemFunction("Thermometer Station:",OpenEditWundergroundEditTemperatureSensorDisplay);
+      WundergroundSensorsMenu.AddMenuItemFunction("Humidity Station:",OpenEditWundergroundEditHumiditySensorDisplay);
 //      WundergroundSensorsMenu.AddMenuItemFunction("Anemometer Station: ",OpenEditWundergroundAnemometerDisplay);
 //      WundergroundSensorsMenu.AddMenuItemFunction("Wind Direction Station: ",OpenEditWundergroundWindDirectionSensorDisplay);
       //WundergroundSensorsMenu.AddMenuItemFunction("Barometric Pressure Station: ",);
@@ -2034,10 +2032,7 @@ void xEditWundergroundSensorsMenu::init(){
     }
 
 void xEditWundergroundSensorsMenu::update(){
-  oled.clearDisplay();
-  oled.setCursor(0, 0);
   WundergroundSensorsMenu.display();
-  oled.display();
 }
 
 void xEditWundergroundSensorsMenu::saveDisplay(){
@@ -2058,9 +2053,13 @@ class xEditWundergroundHumidityDisplay:public xDisplay{
 
 void xEditWundergroundHumidityDisplay::init(){
   TheMenu=&WundergroundHumiditySensorMenu;
+  WundergroundHumiditySensorMenu.init();
   WundergroundHumiditySensorMenu.AddMenuItemFunction("Active: ",OpenEditWundergroundEditHumidityActiveDisplay);
   WundergroundHumiditySensorMenu.AddMenuItemFunction("Station: ",OpenEditWundergroundEditHumidityStationChoiceDisplay);
   WundergroundHumiditySensorMenu.AddMenuItemFunction("Sensor: ",OpenEditWundergroundEditHumidityStationSensorChoiceDisplay);
+  up.button_press_handler=xUpMenuPress;
+  down.button_press_handler=xDownMenuPress;
+  enter.button_press_handler=xEnterMenuPress;
 }
 
 void xEditWundergroundHumidityDisplay::update(){
@@ -2103,7 +2102,34 @@ void xEditWundergroundHumidityActiveDisplay::saveDisplay(){
   QueueHumidityForInterfaces=_Wunderground_Humidity_Sensor_Active.YN;
   saveHumidityToDisk();
   SetDefaultDisplay();
-}
+ }
+
+/*
+  @brief Choose which station to pull humidity for Wunderground Interface
+*/
+class xEditWundergroundHumidityStationChoiceDisplay:public xDisplay{
+  Choice HumidityStation;
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+
+    void xEditWundergroundHumidityStationChoiceDisplay::init(){}
+    void xEditWundergroundHumidityStationChoiceDisplay::update(){}
+    void xEditWundergroundHumidityStationChoiceDisplay::saveDisplay(){}
+
+// Choose the Humidity sensor within the Station
+class xEditWundergroundHumidityStationSensorChoiceDisplay:public xDisplay{
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+
+    void xEditWundergroundHumidityStationSensorChoiceDisplay::init(){}
+    void xEditWundergroundHumidityStationSensorChoiceDisplay::update(){}
+    void xEditWundergroundHumidityStationSensorChoiceDisplay::saveDisplay(){}
 
 /*
   Edit Wunderground Anemometer 
@@ -2122,19 +2148,63 @@ void xEditWundergroundAnemometerDisplay::saveDisplay(){
   SetDefaultDisplay();
 }
 
-class xEditWundergroundThermometerDisplay:public xDisplay{
+/*
+  @class xEditWundergroundThermometerDisplay
+*/
+class xEditWundergroundThermometerDisplayMenu:public xDisplay{
+  xMenu WundergroundThermometerSettingsMenu;
     public:
     void init();
     void update();
     void saveDisplay();
 };
 
-void xEditWundergroundThermometerDisplay::init(){}
-void xEditWundergroundThermometerDisplay::update(){}
-void xEditWundergroundThermometerDisplay::saveDisplay(){
-//  saveThermometerToDisk();
+void xEditWundergroundThermometerDisplayMenu::init(){
+  TheMenu=&WundergroundThermometerSettingsMenu;
+  WundergroundThermometerSettingsMenu.init();
+  WundergroundThermometerSettingsMenu.AddMenuItemFunction("Active: ",OpenEditWundergroundThermometerActiveDisplay);
+  WundergroundThermometerSettingsMenu.AddMenuItemFunction("Station: ",OpenEditWundergroundThermometerStationDisplay);
+  WundergroundThermometerSettingsMenu.AddMenuItemFunction("Sensor: ",OpenEditWundergroundThermometerSensorDisplay);
+  up.button_press_handler=xUpMenuPress;
+  down.button_press_handler=xDownMenuPress;
+  enter.button_press_handler=xEnterMenuPress;
+}
+void xEditWundergroundThermometerDisplayMenu::update(){
+  WundergroundThermometerSettingsMenu.display();
+}
+void xEditWundergroundThermometerDisplayMenu::saveDisplay(){
+}
+
+class xEditWundergroundThermometerActiveDisplay:public xDisplay{
+  YNField _WundergroundThermometerActive;
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+void xEditWundergroundThermometerActiveDisplay::init(){
+  TheYNField=&_WundergroundThermometerActive;
+  _WundergroundThermometerActive.YN=QueueThermometerForInterfaces;
+  up.button_press_handler=xUpPressYN;
+  down.button_press_handler=xDownPressYN;
+  enter.button_press_handler=xEnterPressYN;
+}
+void xEditWundergroundThermometerActiveDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+   _WundergroundThermometerActive.display();
+  oled.display();
+}
+void xEditWundergroundThermometerActiveDisplay::saveDisplay(){
+  QueueThermometerForInterfaces=_WundergroundThermometerActive.YN;
+  saveThermometerToDisk();
   SetDefaultDisplay();
 }
+
+/*
+  @class 
+  @brief
+*/
 
 class xEditWundergroundWindDirectionDisplay:public xDisplay{
     public:
@@ -2144,9 +2214,10 @@ class xEditWundergroundWindDirectionDisplay:public xDisplay{
 };
 
 void xEditWundergroundWindDirectionDisplay::init(){}
-void xEditWundergroundWindDirectionDisplay::update(){}
+void xEditWundergroundWindDirectionDisplay::update(){
+
+}
 void xEditWundergroundWindDirectionDisplay::saveDisplay(){
-  
   SetDefaultDisplay();
 }
 
@@ -2167,14 +2238,20 @@ xEditStationSensorsMenu _xEditStationSensorsMenu;
 
 /* Wunderground Interface Display definitions*/
 xWundergroundSettingsDisplay WundergroundSettingsDisplay; 
+xEditWundergroundSensorsMenu _xEditWundergroundSensorsMenu;
 xWundergroundEditStationNameDisplay _xWundergroundEditStationNameDisplay;
 xWundergroundEditStationPasswordDisplay _xWundergroundEditStationPasswordDisplay;
 xWundergroundEditStationActiveDisplay _xWundergroundEditStationActiveDisplay;
-xEditWundergroundHumidityDisplay _xEditWundergroundHumidityDisplay;
-xEditWundergroundHumidityActiveDisplay _xEditWundergroundHumidityActiveDisplay;
+
+
+xEditWundergroundHumidityDisplay _xEditWundergroundHumidityDisplay; // Humidity Sensor Settings Menu for Wunderground Interface
+xEditWundergroundHumidityActiveDisplay _xEditWundergroundHumidityActiveDisplay; // Humidity Sensor Active Field for Wunderground Interface
+
+xEditWundergroundThermometerDisplayMenu _xEditWundergroundThermometerDisplayMenu;
+xEditWundergroundThermometerActiveDisplay _xEditWundergroundThermometerActiveDisplay;
 
 xEditWundergroundAnemometerDisplay _xEditWundergroundAnemometerDisplay;
-xEditWundergroundThermometerDisplay _xEditWundergroundThermometerDisplay;
+//xEditWundergroundThermometerDisplay _xEditWundergroundThermometerDisplay;
 xEditWundergroundWindDirectionDisplay _xEditWundergroundWindDirectionDisplay;
 
 static void xDisplayTask(void* pvParameters) {
@@ -2438,6 +2515,11 @@ void OpenEditDavisStationSensorsDisplay(){
 /*
   Code to open Edit Wunderground Interface displays
 */
+void OpenEditWundergroundSensorsMenu(){
+      xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditWundergroundSensorsMenu;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
 /*
   @brief Opens the menu for the Wunderground Interface Anemometer sensor
 */
@@ -2459,7 +2541,7 @@ void OpenEditWundergroundWindDirectionSensorDisplay(){
 */
 void OpenEditWundergroundEditTemperatureSensorDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundThermometerDisplay;
+  xMenuEvent.Display=&_xEditWundergroundThermometerDisplayMenu;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2495,4 +2577,22 @@ void OpenEditWundergroundEditHumidityStationSensorChoiceDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xEditDavisStationDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
-} 
+}
+/*
+  @brief Wunderground Interface settings display - thermometer active. 
+*/
+void OpenEditWundergroundThermometerActiveDisplay(){
+    xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditWundergroundThermometerActiveDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+void OpenEditWundergroundThermometerStationDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditWundergroundHumidityActiveDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+void OpenEditWundergroundThermometerSensorDisplay(){
+    xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Display=&_xEditWundergroundHumidityActiveDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
