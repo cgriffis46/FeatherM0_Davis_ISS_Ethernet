@@ -2029,7 +2029,7 @@ void xEditWundergroundSensorsMenu::init(){
     up.button_press_handler=xUpMenuPress;
     down.button_press_handler=xDownMenuPress;
     enter.button_press_handler=xEnterMenuPress;
-    }
+}
 
 void xEditWundergroundSensorsMenu::update(){
   WundergroundSensorsMenu.display();
@@ -2205,7 +2205,6 @@ void xEditWundergroundThermometerActiveDisplay::saveDisplay(){
   @class 
   @brief
 */
-
 class xEditWundergroundWindDirectionDisplay:public xDisplay{
     public:
     void init();
@@ -2215,7 +2214,6 @@ class xEditWundergroundWindDirectionDisplay:public xDisplay{
 
 void xEditWundergroundWindDirectionDisplay::init(){}
 void xEditWundergroundWindDirectionDisplay::update(){
-
 }
 void xEditWundergroundWindDirectionDisplay::saveDisplay(){
   SetDefaultDisplay();
@@ -2449,24 +2447,20 @@ void SetWundergroundEditActiveDisplay(){
 /*
   @brief Button handlers for the YN field
 */
-
 void xUpPressYN(){
   TheDisplay->TheYNField->next();
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
-
 void xDownPressYN(){
   TheDisplay->TheYNField->next();
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
-
 void xEnterPressYN(){
   xMenuEvent.DisplayAction=DISPLAY_SAVE;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
-
 void SaveYNField(){
 
 }
@@ -2479,7 +2473,6 @@ void xWundergroundEditStationActiveDisplay::init(){
   down.button_press_handler=xDownPressYN;
   enter.button_press_handler=xEnterPressYN;
 }
-
 void xWundergroundEditStationActiveDisplay::update(){
   oled.clearDisplay();
   oled.setCursor(0, 0);
@@ -2487,7 +2480,6 @@ void xWundergroundEditStationActiveDisplay::update(){
   _WundergroundStationActive.display();
   oled.display();
 }
-
 void xWundergroundEditStationActiveDisplay::saveDisplay(){
   WundergroundInfceEnable=TheDisplay->TheYNField->YN;
   SaveWundergroundCredentials();
