@@ -2243,7 +2243,6 @@ xWundergroundEditStationNameDisplay _xWundergroundEditStationNameDisplay;
 xWundergroundEditStationPasswordDisplay _xWundergroundEditStationPasswordDisplay;
 xWundergroundEditStationActiveDisplay _xWundergroundEditStationActiveDisplay;
 
-
 xEditWundergroundHumidityDisplay _xEditWundergroundHumidityDisplay; // Humidity Sensor Settings Menu for Wunderground Interface
 xEditWundergroundHumidityActiveDisplay _xEditWundergroundHumidityActiveDisplay; // Humidity Sensor Active Field for Wunderground Interface
 
@@ -2251,8 +2250,8 @@ xEditWundergroundThermometerDisplayMenu _xEditWundergroundThermometerDisplayMenu
 xEditWundergroundThermometerActiveDisplay _xEditWundergroundThermometerActiveDisplay;
 
 xEditWundergroundAnemometerDisplay _xEditWundergroundAnemometerDisplay;
-//xEditWundergroundThermometerDisplay _xEditWundergroundThermometerDisplay;
 xEditWundergroundWindDirectionDisplay _xEditWundergroundWindDirectionDisplay;
+
 
 static void xDisplayTask(void* pvParameters) {
   DisplayQueue = xQueueCreate(2,sizeof(xDisplayEvent));
@@ -2306,27 +2305,49 @@ void xUpPress(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&MainMenuDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
-  Serial.println("Up Pressed");
+  #ifdef _DEBUG_BUTTON_INFCE
+    Serial.println("Up Pressed");
+  #endif
 }
-
+/*
+  @brief Default Button Handler for Up:Released
+*/
 void xUpRelease(){
-  Serial.println("Up Released");
+  #ifdef _DEBUG_BUTTON_INFCE
+    Serial.println("Up Released");
+  #endif
 }
-
+/*
+  @brief Default Button Handler for Down:Pressed
+*/
 void xDownPress(){
-  Serial.println("Down Pressed");
+  #ifdef _DEBUG_BUTTON_INFCE
+    Serial.println("Down Pressed");
+  #endif
 }
-
+/*
+  @brief Default Button Handler for Down:Released
+*/
 void xDownRelease(){
-  Serial.println("Down Released");
+  #ifdef _DEBUG_BUTTON_INFCE
+    Serial.println("Down Released");
+  #endif
 }
-
+/*
+  @brief Default Button Handler for Enter:Pressed
+*/
 void xEnterPress(){
-  Serial.println("Enter Pressed");
+  #ifdef _DEBUG_BUTTON_INFCE
+    Serial.println("Enter Pressed");
+  #endif
 }
-
+/*
+  @brief Default Button Handler for Enter:Released
+*/
 void xEnterRelease(){
-  Serial.println("Enter");
+  #ifdef _DEBUG_BUTTON_INFCE
+    Serial.println("Enter Released");
+  #endif
 }
 /* End default button handlers */
 
@@ -2385,29 +2406,40 @@ void SetSettingsDisplay(){
   xMenuEvent.Display=&SettingsDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 
+/*
+  @brief Opens the Menu to choose which Interface to edit
+*/
 void SetInterfacesDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&InterfaceSettingsDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
-
+/*
+  @brief Opens the Wunderground Interface Settings Menu
+*/
 void SetWundergroundSettingsDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&WundergroundSettingsDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
-
+/*
+  @brief Opens the Wunderground Interface Edit Name display
+*/
 void SetWundergroundEditNameDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xWundergroundEditStationNameDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
-
+/*
+  @brief Opens the Wunderground Interface Edit Password display
+*/
 void SetWundergroundEditPasswordDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xWundergroundEditStationPasswordDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
-
+/*
+  @brief Opens the Wunderground Interface Active: YN display
+*/
 void SetWundergroundEditActiveDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xWundergroundEditStationActiveDisplay;
@@ -2484,12 +2516,18 @@ void xEnterPressChoice(){
 }
 /* End CHOICE */
 
+/*
+@brief Opens Davis Station Menu to select which Davis Station to edit
+*/
 void OpenEditStationMenu(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xWXStationMenu;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 
+/*
+  @brief Edit Settings for Davis station in stationSel
+*/
 void OpenEditStationDisplay(){
   stationSel=_xWXStationMenu.WXStationList.getSel(); 
   xMenuEvent.DisplayAction=DISPLAY_SET;
