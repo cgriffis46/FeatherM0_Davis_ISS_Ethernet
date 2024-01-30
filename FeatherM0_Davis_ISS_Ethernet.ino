@@ -2675,6 +2675,9 @@ void OpenEditWundergroundThermometerActiveDisplay(){
   xMenuEvent.Display=&_xEditWundergroundThermometerActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
+/*
+  @brief Lets the user set which station to pull humidity from
+*/
 void OpenEditWundergroundThermometerStationChoiceDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xEditWundergroundHumidityActiveDisplay;
@@ -2685,11 +2688,17 @@ void OpenEditWundergroundThermometerSensorChoiceDisplay(){
   xMenuEvent.Display=&_xEditWundergroundHumidityActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
+/*
+  @brief Opens the Wunderground Rain Gauge Settings Menu
+*/
 void OpenEditWundergroundRainGaugeSettingsMenu(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xEditWundergroundRainGaugeSettingsMenu;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
+/*
+  @brief Opens the Wunderground Rain Gauge Active YN display
+*/
 void OpenEditWundergroundRainGaugeSettingsActiveDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Display=&_xEditWundergroundRainGaugeSettingsActiveDisplay;
