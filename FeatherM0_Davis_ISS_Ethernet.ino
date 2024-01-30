@@ -95,6 +95,7 @@ float temperature = NAN, humidity = NAN;
 float tempf = NAN, tempc = NAN;
 bool QueueThermometerForInterfaces = true;
 bool QueueHumidityForInterfaces = true;
+bool QueueRainGaugeForInterfaces = false;
 bool UseCelcius = false;
 #endif
 
@@ -1982,6 +1983,7 @@ void xEditDavisStationActiveDisplay::update(){
 }
 
 void xEditDavisStationActiveDisplay::saveDisplay(){
+  stations[stationSel].active=_DavisStationActive.YN;
 }
 
 class xEditDavisStationSensorsDisplay:public xDisplay{
@@ -2025,10 +2027,9 @@ class xEditWundergroundSensorsMenu: public xDisplay{
 void xEditWundergroundSensorsMenu::init(){
       TheMenu=&WundergroundSensorsMenu;
       WundergroundSensorsMenu.init();
-      WundergroundSensorsMenu.AddMenuItemFunction("Thermometer Station:",OpenEditWundergroundEditTemperatureSensorDisplay);
-      WundergroundSensorsMenu.AddMenuItemFunction("Humidity Station:",OpenEditWundergroundEditHumiditySensorDisplay);
-      
-      WundergroundSensorsMenu.AddMenuItemFunction("Rain Gauge Station:",OpenEditWundergroundRainGaugeSettingsMenu);
+      WundergroundSensorsMenu.AddMenuItemFunction("Thermometer:",OpenEditWundergroundEditTemperatureSensorDisplay);
+      WundergroundSensorsMenu.AddMenuItemFunction("Humidity:",OpenEditWundergroundEditHumiditySensorDisplay);
+      WundergroundSensorsMenu.AddMenuItemFunction("Rain Gauge:",OpenEditWundergroundRainGaugeSettingsMenu);
 //      WundergroundSensorsMenu.AddMenuItemFunction("Anemometer Station: ",OpenEditWundergroundAnemometerDisplay);
 //      WundergroundSensorsMenu.AddMenuItemFunction("Wind Direction Station: ",OpenEditWundergroundWindDirectionSensorDisplay);
       //WundergroundSensorsMenu.AddMenuItemFunction("Barometric Pressure Station: ",);
@@ -2061,8 +2062,8 @@ void xEditWundergroundHumidityDisplay::init(){
   TheMenu=&WundergroundHumiditySensorMenu;
   WundergroundHumiditySensorMenu.init();
   WundergroundHumiditySensorMenu.AddMenuItemFunction("Active: ",OpenEditWundergroundEditHumidityActiveDisplay);
-  WundergroundHumiditySensorMenu.AddMenuItemFunction("Station: ",OpenEditWundergroundEditHumidityStationChoiceDisplay);
-  WundergroundHumiditySensorMenu.AddMenuItemFunction("Sensor: ",OpenEditWundergroundEditHumidityStationSensorChoiceDisplay);
+//  WundergroundHumiditySensorMenu.AddMenuItemFunction("Station: ",OpenEditWundergroundEditHumidityStationChoiceDisplay);
+//  WundergroundHumiditySensorMenu.AddMenuItemFunction("Sensor: ",OpenEditWundergroundEditHumidityStationSensorChoiceDisplay);
   up.button_press_handler=xUpMenuPress;
   down.button_press_handler=xDownMenuPress;
   enter.button_press_handler=xEnterMenuPress;
@@ -2260,7 +2261,7 @@ class xEditWundergroundRainGaugeSettingsActiveDisplay:public xDisplay{
 };
 void xEditWundergroundRainGaugeSettingsActiveDisplay::init(){
   TheYNField=&RainGaugeActive;
-  RainGaugeActive.YN=false;
+  RainGaugeActive.YN=QueueRainGaugeForInterfaces;
   up.button_press_handler=xUpPressYN;
   down.button_press_handler=xDownPressYN;
   enter.button_press_handler=xEnterPressYN;
@@ -2272,7 +2273,8 @@ void xEditWundergroundRainGaugeSettingsActiveDisplay::update(){
   oled.display();
 }
 void xEditWundergroundRainGaugeSettingsActiveDisplay::saveDisplay(){
-    SetDefaultDisplay();
+  QueueRainGaugeForInterfaces=RainGaugeActive.YN;
+  SetDefaultDisplay();
 }
 
 class xEditWundergroundRainGaugeSettingsStationChoiceDisplay:public xDisplay{
@@ -2379,8 +2381,8 @@ static void xDisplayTask(void* pvParameters) {
           xSemaphoreGive(I2CBusSemaphore);
         }
   }
-  taskYIELD();
-  //vTaskDelay(100 / portTICK_PERIOD_MS);
+  //taskYIELD();
+  vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 }
 
