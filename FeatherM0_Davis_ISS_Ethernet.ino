@@ -5,8 +5,6 @@
   You are free to use/extend this library but please abide with the CC-BY-SA license:
   http://creativecommons.org/licenses/by-sa/3.0/
 
-
-
 */
 
 
@@ -1034,8 +1032,6 @@ static void xHTTPUpdateTask(void* pvParameters) {
   }
 }
 
-
-
 static void xDataSamplerTask(void* pvParameters) {
   int DataLogIndex = 0;
   vTaskDelay(60000 / portTICK_PERIOD_MS);
@@ -1832,26 +1828,6 @@ class xWundergroundEditStationNameDisplay:public xDisplay{
   void saveDisplay();
   TextField _WundergroundStationName;
 };
-
-class xWundergroundEditStationPasswordDisplay:public xDisplay{
-  void init();
-  void update();
-  void saveDisplay();
-  TextField _WundergroundStationPassword;
-};
-
-void xWundergroundEditStationNameDisplay::saveDisplay(){
-  memcpy(WundergroundStationID,_WundergroundStationName.InputString,WundergroundStationIDLength);
-  SaveWundergroundCredentials();
-  SetDefaultDisplay();
-}
-
-void xWundergroundEditStationPasswordDisplay::saveDisplay(){
-  memcpy(WundergroundStationPassword,_WundergroundStationPassword.InputString,WundergroundStationIDLength);
-  SaveWundergroundCredentials();
-  SetDefaultDisplay();
-}
-
 /*
   @class xWundergroundEditStationNameDisplay
   @brief Default the Wunderground Interface Station Name field to WundergroundStationID
@@ -1874,6 +1850,25 @@ void xWundergroundEditStationNameDisplay::update(){
   oled.display();
 }
 /*
+  @class xWundergroundEditStationNameDisplay
+  @brief Save the WundergroundStationID to NVRAM
+*/
+void xWundergroundEditStationNameDisplay::saveDisplay(){
+  memcpy(WundergroundStationID,_WundergroundStationName.InputString,WundergroundStationIDLength);
+  SaveWundergroundCredentials();
+  SetDefaultDisplay();
+}
+/*
+  @class xWundergroundEditStationPasswordDisplay
+  @brief Display to edit the Wunderground Station Password
+*/
+class xWundergroundEditStationPasswordDisplay:public xDisplay{
+  void init();
+  void update();
+  void saveDisplay();
+  TextField _WundergroundStationPassword;
+};
+/*
   @class xWundergroundEditStationPasswordDisplay
   @brief Init function for xWundergroundEditStationPasswordDisplay class. 
     Default to WundergroundStationPassword
@@ -1885,7 +1880,6 @@ void xWundergroundEditStationPasswordDisplay::init(){
   down.button_press_handler=xDownTextfieldPress;
   enter.button_press_handler=xEnterTextfieldPress;
 }
-
 /* 
   @class xWundergroundEditStationPasswordDisplay
   @brief Draw the xWundergroundEditStationPasswordDisplay
@@ -1896,8 +1890,15 @@ void xWundergroundEditStationPasswordDisplay::update(){
   _WundergroundStationPassword.display();
   oled.display();
 }
-
-
+/*
+  @class xWundergroundEditStationPasswordDisplay
+  @brief Save the WundergroundStationPassword to NVRAM
+*/
+void xWundergroundEditStationPasswordDisplay::saveDisplay(){
+  memcpy(WundergroundStationPassword,_WundergroundStationPassword.InputString,WundergroundStationIDLength);
+  SaveWundergroundCredentials();
+  SetDefaultDisplay();
+}
 /*
   @brief Edit Davis Station list 
 */
@@ -1906,9 +1907,11 @@ class xWXStationMenu:public xDisplay{
   xMenu WXStationList;
   void init();
   void update();
-  void saveDisplay();
 };
-
+/*
+  @class xWXStationMenu
+  @brief Initialize the Davis Station Menu 
+*/
 void xWXStationMenu::init(){
   TheMenu=&WXStationList;
   WXStationList.AddMenuItemFunction("Station 1",OpenEditStationDisplay);
@@ -1923,20 +1926,17 @@ void xWXStationMenu::init(){
   down.button_press_handler=xDownMenuPress;
   enter.button_press_handler=xEnterMenuPress;
 }
-
+/*
+  @brief Draw the Davis Station Menu
+*/
 void xWXStationMenu::update(){
   WXStationList.display();
-}
-
-void xWXStationMenu::saveDisplay(){
-
 }
 
 class xEditDavisStationDisplay:public xDisplay{
   xMenu DavisStationMenu;
   void init();
   void update();
-  void saveDisplay();
 };
 
 void xEditDavisStationDisplay::init(){
@@ -1954,8 +1954,6 @@ void xEditDavisStationDisplay::init(){
     DavisStationMenu.display();
     oled.display();
   }
-
-  void xEditDavisStationDisplay::saveDisplay(){}
 
 class xEditDavisStationActiveDisplay:public xDisplay{
   public:
@@ -1986,31 +1984,23 @@ void xEditDavisStationActiveDisplay::saveDisplay(){
   stations[stationSel].active=_DavisStationActive.YN;
 }
 
-class xEditDavisStationSensorsDisplay:public xDisplay{
-};
-
 /*
-  @brief E
+  @brief 
 */
 class xEditStationSensorsMenu:public xDisplay{
   xMenu StationSensorsMenu;
     public:
     void init();
     void update();
-    void saveDisplay();
 };
 
 void xEditStationSensorsMenu::init(){
   TheMenu=&StationSensorsMenu;
- // StationSensorsMenu.
+  StationSensorsMenu.init();
 }
 
 void xEditStationSensorsMenu::update(){
   StationSensorsMenu.display();
-}
-
-void xEditStationSensorsMenu::saveDisplay(){
-
 }
 
 /*
@@ -2021,7 +2011,6 @@ class xEditWundergroundSensorsMenu: public xDisplay{
     public:
     void init();
     void update();
-    void saveDisplay();
 };
 
 void xEditWundergroundSensorsMenu::init(){
@@ -2042,10 +2031,6 @@ void xEditWundergroundSensorsMenu::update(){
   WundergroundSensorsMenu.display();
 }
 
-void xEditWundergroundSensorsMenu::saveDisplay(){
-  SetDefaultDisplay();
-}
-
 /*
   Wunderground Interface Humidity Sensor Settings Menu
 */
@@ -2055,7 +2040,6 @@ class xEditWundergroundHumidityDisplay:public xDisplay{
     public:
     void init();
     void update();
-    void saveDisplay();
 };
 
 void xEditWundergroundHumidityDisplay::init(){
@@ -2075,8 +2059,6 @@ void xEditWundergroundHumidityDisplay::update(){
   WundergroundHumiditySensorMenu.display();
   oled.display();
 }
-
-void xEditWundergroundHumidityDisplay::saveDisplay(){}
 
 /*
   @class xEditWundergroundHumidityActiveDisplay
@@ -2146,14 +2128,10 @@ class xEditWundergroundAnemometerDisplay:public xDisplay{
     public:
     void init();
     void update();
-    void saveDisplay();
 };
 
 void xEditWundergroundAnemometerDisplay::init(){}
 void xEditWundergroundAnemometerDisplay::update(){}
-void xEditWundergroundAnemometerDisplay::saveDisplay(){
-  SetDefaultDisplay();
-}
 
 /*
   @class xEditWundergroundThermometerDisplay
@@ -2163,7 +2141,6 @@ class xEditWundergroundThermometerDisplayMenu:public xDisplay{
     public:
     void init();
     void update();
-    void saveDisplay();
 };
 
 void xEditWundergroundThermometerDisplayMenu::init(){
@@ -2179,9 +2156,6 @@ void xEditWundergroundThermometerDisplayMenu::init(){
 void xEditWundergroundThermometerDisplayMenu::update(){
   WundergroundThermometerSettingsMenu.display();
 }
-void xEditWundergroundThermometerDisplayMenu::saveDisplay(){
-}
-
 class xEditWundergroundThermometerActiveDisplay:public xDisplay{
     public:
     void init();
@@ -2216,15 +2190,12 @@ class xEditWundergroundWindDirectionDisplay:public xDisplay{
     public:
     void init();
     void update();
-    void saveDisplay();
 };
 
 void xEditWundergroundWindDirectionDisplay::init(){}
 void xEditWundergroundWindDirectionDisplay::update(){
 }
-void xEditWundergroundWindDirectionDisplay::saveDisplay(){
-  SetDefaultDisplay();
-}
+
 /*
   @class xEditWundergroundRainGaugeSettingsMenu
   @brief Wunderground Interface Rain Gauge Settings Menu
@@ -2281,14 +2252,10 @@ class xEditWundergroundRainGaugeSettingsStationChoiceDisplay:public xDisplay{
     public:
     void init();
     void update();
-    void saveDisplay();
 };
 
 void xEditWundergroundRainGaugeSettingsStationChoiceDisplay::init(){}
 void xEditWundergroundRainGaugeSettingsStationChoiceDisplay::update(){}
-void xEditWundergroundRainGaugeSettingsStationChoiceDisplay::saveDisplay(){
-    SetDefaultDisplay();
-}
 
 class xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay:public xDisplay{
     public:
