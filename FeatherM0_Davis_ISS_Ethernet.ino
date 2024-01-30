@@ -414,28 +414,21 @@ void setup() {
     Serial.println("Ethernet cable is not connected.");
   }
   dnsclient.begin(IPAddress(1, 1, 1, 1));
-
   timeClient.begin();  // Start NTP Client
-
   server.begin();  // start webserver
   Serial.print("server is at ");
   Serial.println(Ethernet.localIP());
   HTTPClient.setConnectionTimeout(2000);
   xTaskCreate(xHTTPUpdateTask, "HTTP Update Task", 256, NULL, tskIDLE_PRIORITY + 1, &xHTTPClientTaskHandle);  // Start web server task
-
   // pinMode(10, INPUT_PULLUP); // Ethernet Feather CS pin
-
   pinMode(4, OUTPUT);
   digitalWrite(4, LOW);
-
   radio.setStations(stations, 1);
   radio.initialize(FREQ_BAND_US);
   radio.setBandwidth(RF69_DAVIS_BW_WIDE);
-
   xTaskCreate(xReadRadioTask, "Radio Task", 256, NULL, tskIDLE_PRIORITY + 3, &xReadRadioTaskHandle);
   radio.xReadRadioTaskHandle = xReadRadioTaskHandle;
   xTaskCreate(xNTPClientTask, "NTP Task", 512, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle);  // Start NTP Update task
-
   DataStringQueueHandle = xQueueCreate(MAXDATASTRINGS, DATASTRINGLENGTH);
   xTaskCreate(xDataSamplerTask, "Datasampler", 256, NULL, tskIDLE_PRIORITY + 1, &xDataSamplerTaskHandle);
   xTaskCreate(xDataloggerTask, "Datalogger", 256, NULL, tskIDLE_PRIORITY + 1, &xDataloggerTaskHandle);
@@ -2026,7 +2019,7 @@ void xEditWundergroundSensorsMenu::init(){
     down.button_press_handler=xDownMenuPress;
     enter.button_press_handler=xEnterMenuPress;
 }
-
+ 
 void xEditWundergroundSensorsMenu::update(){
   WundergroundSensorsMenu.display();
 }
@@ -2336,7 +2329,7 @@ static void xDisplayTask(void* pvParameters) {
                 TheDisplay->saveDisplay();
         }
         else {}
-        }
+      }
       xSemaphoreGive(I2CBusSemaphore);
     }
   } else { // refresh the display even when there are no updates queued
@@ -2347,9 +2340,9 @@ static void xDisplayTask(void* pvParameters) {
           }
           xSemaphoreGive(I2CBusSemaphore);
         }
-  }
+    }
   //taskYIELD();
-  vTaskDelay(100 / portTICK_PERIOD_MS);
+  vTaskDelay( 250 / portTICK_PERIOD_MS );
   }
 }
 
