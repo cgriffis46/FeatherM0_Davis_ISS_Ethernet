@@ -1173,7 +1173,8 @@ enum xDisplayAction{
   DISPLAY_UPDATE,
   DISPLAY_SAVE,
   DISPLAY_OK,
-  DISPLAY_NEXT_FIELD
+  DISPLAY_NEXT_FIELD,
+  SET_ACTIVE_DISPLAY_ITEM
 };
 
 enum xButtonState {
@@ -1354,11 +1355,24 @@ enum xMenuFunction_T {
   Menu       // Menu Action loads another Menu
 };
 
+enum xDisplayItemType{
+  DISPLAY_ITEM,
+  MENU,
+  LABEL,
+  CELL,
+  CHOICE,
+  YNFIELD,
+  TEXT
+};
+
 class xDisplayItem {
+  private:
+      const xDisplayItemType type=DISPLAY_ITEM;
   public:
   virtual void init();
   virtual void display();
-  virtual bool isMenu(){return false;}
+  xDisplayItemType getType(){return type;}
+//  virtual bool isMenu(){return false;}
 };
 
 void xDisplayItem::display(){}
@@ -1376,7 +1390,7 @@ class xMenu : public xDisplayItem {
   String text;                   // menu item
   xMenu *SubMenu;
 };
-
+  const xDisplayItemType type=MENU;
   int numButtons;
   int sel = 0; // menu item selected
   int DisplayLines = 4; // max # lines to display for the menu
@@ -1392,7 +1406,7 @@ class xMenu : public xDisplayItem {
     virtual void xMenuUp();
     virtual void xMenuDown();
     virtual void xMenuEnter();
-    bool isMenu(){return true;}
+ //   bool isMenu(){return true;}
     friend class xMenuItem;
     int getSel();
 };
@@ -1475,6 +1489,8 @@ void xMenu::AddMenuItemSubmenu(String _text, xMenu *_SubMenu){
 const char CharList[MaxCharList] = {'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','0','1','2','3','4','5','6','7','8','9','<','>',' '};
 
 class TextField : public xDisplayItem{
+  private:
+    const xDisplayItemType type=TEXT;
   public:
     char InputString[64];
     int index=0; // index within the string
@@ -1486,6 +1502,8 @@ class TextField : public xDisplayItem{
 };
 
 class YNField : public xDisplayItem{
+  private:
+    const xDisplayItemType type=YNFIELD;
   public:
     bool YN = false;
     void setField(bool _yn);
@@ -1525,6 +1543,8 @@ class Choice: public xDisplayItem{
     String text;
   };
     int numChoices=0;
+  private:
+    const xDisplayItemType type=CHOICE;
   public:
     int sel=0;
     void addChoice(String _text);
@@ -1618,7 +1638,7 @@ union XDisplayEventPayload{
     xDisplay *Display;
 };
 
-class xDisplayEvent{
+struct xDisplayEvent{
   public:
     xDisplayAction DisplayAction;
     XDisplayEventPayload Payload;
@@ -2154,7 +2174,7 @@ void xEditWundergroundThermometerDisplayMenu::init(){
   down.button_press_handler=xDownMenuPress;
   enter.button_press_handler=xEnterMenuPress;
 }
-void xEditWundergroundThermometerDisplayMenu::update(){
+  void xEditWundergroundThermometerDisplayMenu::update(){
   WundergroundThermometerSettingsMenu.display();
 }
 class xEditWundergroundThermometerActiveDisplay:public xDisplay{
@@ -2284,8 +2304,7 @@ xDefaultDisplay _DefaultDisplay;
 xMainMenuDisplay MainMenuDisplay; // Main Menu
 xNetStatusDisplay NetStatusDisplay;
 xSettingsDisplay SettingsDisplay; // Settings Menu
-xInterfacesDisplay InterfaceSettingsDisplay; //
- Edit Interfaces Menu
+xInterfacesDisplay InterfaceSettingsDisplay; // Edit Interfaces Menu
 xWXStationMenu _xWXStationMenu;
 xEditDavisStationDisplay _xEditDavisStationDisplay;
 xEditDavisStationActiveDisplay _xEditDavisStationActiveDisplay;
