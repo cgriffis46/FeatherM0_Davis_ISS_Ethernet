@@ -1598,7 +1598,9 @@ class xDisplay {
 };
 
 void xDisplay::NextDisplayItem(){}
-void xDisplay::ok(){}
+void xDisplay::ok(){
+  SetDefaultDisplay();
+}
 void xDisplay::saveDisplay(){
   SetDefaultDisplay();
 }
@@ -1607,15 +1609,21 @@ void xDisplay::setMenu(xMenu *_Menu){
   TheMenu = _Menu;
 }
 
-class xDisplayEvent{
-  public:
-    xDisplayAction DisplayAction;
-    xDisplay *Display;
-};
 
 void xDisplay::init(){}
 
 void xDisplay::update(){}
+
+union XDisplayEventPayload{
+    xDisplay *Display;
+};
+
+class xDisplayEvent{
+  public:
+    xDisplayAction DisplayAction;
+    XDisplayEventPayload Payload;
+};
+
 
 /*
 
@@ -2276,7 +2284,8 @@ xDefaultDisplay _DefaultDisplay;
 xMainMenuDisplay MainMenuDisplay; // Main Menu
 xNetStatusDisplay NetStatusDisplay;
 xSettingsDisplay SettingsDisplay; // Settings Menu
-xInterfacesDisplay InterfaceSettingsDisplay; // Edit Interfaces Menu
+xInterfacesDisplay InterfaceSettingsDisplay; //
+ Edit Interfaces Menu
 xWXStationMenu _xWXStationMenu;
 xEditDavisStationDisplay _xEditDavisStationDisplay;
 xEditDavisStationActiveDisplay _xEditDavisStationActiveDisplay;
@@ -2304,8 +2313,9 @@ xEditWundergroundWindDirectionDisplay _xEditWundergroundWindDirectionDisplay;
 static void xDisplayTask(void* pvParameters) {
   DisplayQueue = xQueueCreate(2,sizeof(xDisplayEvent));
   TheDisplay = &_DefaultDisplay;
-  DisplayEvent.Display=&_DefaultDisplay;
-  DisplayEvent.DisplayAction=DISPLAY_UPDATE;
+  //_DefaultDisplay.init();
+  DisplayEvent.Payload.Display=&_DefaultDisplay;
+  DisplayEvent.DisplayAction=DISPLAY_SET;
   xQueueSend(DisplayQueue,&DisplayEvent, 1000);
   while (true) {
   //try to get time from RTC
@@ -2315,7 +2325,7 @@ static void xDisplayTask(void* pvParameters) {
       if(xQueueReceive(DisplayQueue, &DisplayEvent, 1)==pdTRUE){
         Serial.println("display event");
         if(DisplayEvent.DisplayAction==DISPLAY_SET){
-          TheDisplay=DisplayEvent.Display;
+          TheDisplay=DisplayEvent.Payload.Display;
           TheDisplay->init();
           TheDisplay->update();
           TheDisplay->LastUpdate = xTaskGetTickCount();
@@ -2353,7 +2363,7 @@ xDisplayEvent xMenuEvent;
 */
 void xUpPress(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&MainMenuDisplay;
+  xMenuEvent.Payload.Display=&MainMenuDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
   #ifdef _DEBUG_BUTTON_INFCE
     Serial.println("Up Pressed");
@@ -2444,7 +2454,7 @@ void SaveTextField(){
 */
 void SetDefaultDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_DefaultDisplay;
+  xMenuEvent.Payload.Display=&_DefaultDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 
 /*
@@ -2452,7 +2462,7 @@ void SetDefaultDisplay(){
 */
 void SetNetworkStatusDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&NetStatusDisplay;
+  xMenuEvent.Payload.Display=&NetStatusDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 
 /*
@@ -2460,7 +2470,7 @@ void SetNetworkStatusDisplay(){
 */
 void SetSettingsDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&SettingsDisplay;
+  xMenuEvent.Payload.Display=&SettingsDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 
 /*
@@ -2468,14 +2478,14 @@ void SetSettingsDisplay(){
 */
 void SetInterfacesDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&InterfaceSettingsDisplay;
+  xMenuEvent.Payload.Display=&InterfaceSettingsDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
 /*
   @brief Opens the Wunderground Interface Settings Menu
 */
 void SetWundergroundSettingsDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&WundergroundSettingsDisplay;
+  xMenuEvent.Payload.Display=&WundergroundSettingsDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2483,7 +2493,7 @@ void SetWundergroundSettingsDisplay(){
 */
 void SetWundergroundEditNameDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xWundergroundEditStationNameDisplay;
+  xMenuEvent.Payload.Display=&_xWundergroundEditStationNameDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2491,7 +2501,7 @@ void SetWundergroundEditNameDisplay(){
 */
 void SetWundergroundEditPasswordDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xWundergroundEditStationPasswordDisplay;
+  xMenuEvent.Payload.Display=&_xWundergroundEditStationPasswordDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2499,7 +2509,7 @@ void SetWundergroundEditPasswordDisplay(){
 */
 void SetWundergroundEditActiveDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xWundergroundEditStationActiveDisplay;
+  xMenuEvent.Payload.Display=&_xWundergroundEditStationActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2567,7 +2577,7 @@ void xEnterPressChoice(){
 */
 void OpenEditStationMenu(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xWXStationMenu;
+  xMenuEvent.Payload.Display=&_xWXStationMenu;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2576,7 +2586,7 @@ void OpenEditStationMenu(){
 void OpenEditStationDisplay(){
   stationSel=_xWXStationMenu.WXStationList.getSel(); 
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditDavisStationDisplay;
+  xMenuEvent.Payload.Display=&_xEditDavisStationDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2584,7 +2594,7 @@ void OpenEditStationDisplay(){
 */
 void OpenEditDavisStationActiveDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditDavisStationActiveDisplay;
+  xMenuEvent.Payload.Display=&_xEditDavisStationActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2592,7 +2602,7 @@ void OpenEditDavisStationActiveDisplay(){
 */
 void OpenEditDavisStationSensorsDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditDavisStationDisplay;
+  xMenuEvent.Payload.Display=&_xEditDavisStationDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2600,7 +2610,7 @@ void OpenEditDavisStationSensorsDisplay(){
 */
 void OpenEditWundergroundSensorsMenu(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundSensorsMenu;
+  xMenuEvent.Payload.Display=&_xEditWundergroundSensorsMenu;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2608,7 +2618,7 @@ void OpenEditWundergroundSensorsMenu(){
 */
 void OpenEditWundergroundAnemometerDisplay(){
     xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundAnemometerDisplay;
+  xMenuEvent.Payload.Display=&_xEditWundergroundAnemometerDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2616,7 +2626,7 @@ void OpenEditWundergroundAnemometerDisplay(){
 */
 void OpenEditWundergroundWindDirectionSensorDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundWindDirectionDisplay;
+  xMenuEvent.Payload.Display=&_xEditWundergroundWindDirectionDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2624,7 +2634,7 @@ void OpenEditWundergroundWindDirectionSensorDisplay(){
 */
 void OpenEditWundergroundEditTemperatureSensorDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundThermometerDisplayMenu;
+  xMenuEvent.Payload.Display=&_xEditWundergroundThermometerDisplayMenu;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2632,7 +2642,7 @@ void OpenEditWundergroundEditTemperatureSensorDisplay(){
 */
 void OpenEditWundergroundEditHumiditySensorDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundHumidityDisplay;
+  xMenuEvent.Payload.Display=&_xEditWundergroundHumidityDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2640,24 +2650,24 @@ void OpenEditWundergroundEditHumiditySensorDisplay(){
 */
 void OpenEditWundergroundEditPressureSensorDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditDavisStationDisplay;
+  xMenuEvent.Payload.Display=&_xEditDavisStationDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 
 void OpenEditWundergroundEditHumidityActiveDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundHumidityActiveDisplay;
+  xMenuEvent.Payload.Display=&_xEditWundergroundHumidityActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 void OpenEditWundergroundEditHumidityStationChoiceDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditDavisStationDisplay;
+  xMenuEvent.Payload.Display=&_xEditDavisStationDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 
 void OpenEditWundergroundEditHumidityStationSensorChoiceDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditDavisStationDisplay;
+  xMenuEvent.Payload.Display=&_xEditDavisStationDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2665,7 +2675,7 @@ void OpenEditWundergroundEditHumidityStationSensorChoiceDisplay(){
 */
 void OpenEditWundergroundThermometerActiveDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundThermometerActiveDisplay;
+  xMenuEvent.Payload.Display=&_xEditWundergroundThermometerActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2673,12 +2683,12 @@ void OpenEditWundergroundThermometerActiveDisplay(){
 */
 void OpenEditWundergroundThermometerStationChoiceDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundHumidityActiveDisplay;
+  xMenuEvent.Payload.Display=&_xEditWundergroundHumidityActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 void OpenEditWundergroundThermometerSensorChoiceDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundHumidityActiveDisplay;
+  xMenuEvent.Payload.Display=&_xEditWundergroundHumidityActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2686,7 +2696,7 @@ void OpenEditWundergroundThermometerSensorChoiceDisplay(){
 */
 void OpenEditWundergroundRainGaugeSettingsMenu(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundRainGaugeSettingsMenu;
+  xMenuEvent.Payload.Display=&_xEditWundergroundRainGaugeSettingsMenu;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2694,17 +2704,17 @@ void OpenEditWundergroundRainGaugeSettingsMenu(){
 */
 void OpenEditWundergroundRainGaugeSettingsActiveDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundRainGaugeSettingsActiveDisplay;
+  xMenuEvent.Payload.Display=&_xEditWundergroundRainGaugeSettingsActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 void OpenEditWundergroundRainGaugeSettingsStationChoiceDisplay(){
     xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundRainGaugeSettingsStationChoiceDisplay;
+  xMenuEvent.Payload.Display=&_xEditWundergroundRainGaugeSettingsStationChoiceDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 void OpenEditWundergroundRainGaugeSettingsSensorChoiceDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Display=&_xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay;
+  xMenuEvent.Payload.Display=&_xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 
