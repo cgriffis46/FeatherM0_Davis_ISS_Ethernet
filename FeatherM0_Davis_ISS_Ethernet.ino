@@ -339,8 +339,8 @@ TaskHandle_t xNTPClientTaskHandle;               // NTP Client Task Handle
 
 // Semaphore Definitions
 SemaphoreHandle_t I2CBusSemaphore;   // Arbitrate I2C bus access
-SemaphoreHandle_t Eth0Semaphore;     // Arbitrate Eth0 bus access
-StaticSemaphore_t xSPIBusSemaphore;  // Arbitrate the SPI bus
+//SemaphoreHandle_t Eth0Semaphore;     // Arbitrate Eth0 bus access
+//StaticSemaphore_t xSPIBusSemaphore;  // Arbitrate the SPI bus
 SemaphoreHandle_t SPIBusSemaphore;
 static void xinterruptHandlertask(void* pvParameters);
 static void xReadRadioTask(void* pvParameters);
@@ -428,11 +428,14 @@ void setup() {
   radio.setBandwidth(RF69_DAVIS_BW_WIDE);
   xTaskCreate(xReadRadioTask, "Radio Task", 256, NULL, tskIDLE_PRIORITY + 3, &xReadRadioTaskHandle);
   radio.xReadRadioTaskHandle = xReadRadioTaskHandle;
-  xTaskCreate(xNTPClientTask, "NTP Task", 512, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle);  // Start NTP Update task
+  xTaskCreate(xNTPClientTask, "NTP Task", 256, NULL, tskIDLE_PRIORITY + 1, &xNTPClientTaskHandle);  // Start NTP Update task
   DataStringQueueHandle = xQueueCreate(MAXDATASTRINGS, DATASTRINGLENGTH);
-  xTaskCreate(xDataSamplerTask, "Datasampler", 256, NULL, tskIDLE_PRIORITY + 1, &xDataSamplerTaskHandle);
-  xTaskCreate(xDataloggerTask, "Datalogger", 256, NULL, tskIDLE_PRIORITY + 1, &xDataloggerTaskHandle);
-  xTaskCreate(xUpdateWundergroundInfce, "Wunderground Interface Task", 512, NULL, tskIDLE_PRIORITY + 1, &xUpdateWundergroundInfcetaskhandle);
+  /*
+    Datalogger task has started deadlocking unexpectedly. Temporary workaround has been to disable the datalogger task. 
+  */
+  //xTaskCreate(xDataSamplerTask, "Datasampler", 256, NULL, tskIDLE_PRIORITY + 1, &xDataSamplerTaskHandle);
+  //xTaskCreate(xDataloggerTask, "Datalogger", 256, NULL, tskIDLE_PRIORITY + 1, &xDataloggerTaskHandle);
+  xTaskCreate(xUpdateWundergroundInfce, "Wunderground Interface Task", 256, NULL, tskIDLE_PRIORITY + 1, &xUpdateWundergroundInfcetaskhandle);
   xTaskCreate(xDisplayTask, "xDisplay Task", 256, NULL, tskIDLE_PRIORITY + 1, &xDisplayTaskHandle);
   xTaskCreate(xButtonHandlerTask, "xButton Handler Task", 256, NULL, tskIDLE_PRIORITY + 1, &xButtonHandlerTaskHandle);
   Serial.println("Boot complete!");
@@ -665,7 +668,7 @@ static void xReadRadioTask(void* pvParameters) {
 
   while (true) {
 
-    if (xSemaphoreTake(SPIBusSemaphore, 1)) {  // we need eth0 semaphore to update time over NTP
+    if (xSemaphoreTake(SPIBusSemaphore, 1000)) {  // we need eth0 semaphore to update time over NTP
       //Serial.println("xRadio Task has Mutex");
       if ((ulInterruptStatus & 0x01) != 0x00) {
         PayloadReady = true;
@@ -844,7 +847,8 @@ void ModeReadyInterrupt() {
 static void xHTTPUpdateTask(void* pvParameters) {
   char PostActionBuf[64];
   while (true) {
-    if (xSemaphoreTake(SPIBusSemaphore, 5)) {
+    //Serial.println("HTTP task start");
+    if (xSemaphoreTake(SPIBusSemaphore, 1000)) {
       HTTPClient = server.available();
       if (HTTPClient) {
         Serial.println("new client");
@@ -1020,6 +1024,7 @@ static void xHTTPUpdateTask(void* pvParameters) {
       // Give up the semaphore and sleep 250ms
       xSemaphoreGive(SPIBusSemaphore);
     }
+    //Serial.println("HTTP task end");
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     //taskYIELD();
   }
@@ -1029,12 +1034,8 @@ static void xDataSamplerTask(void* pvParameters) {
   int DataLogIndex = 0;
   vTaskDelay(60000 / portTICK_PERIOD_MS);
   while (true) {
-    if (xSemaphoreTake(I2CBusSemaphore, 5)) {
-      now = rtc.now();
-      xSemaphoreGive(I2CBusSemaphore);
-    } else{
-        now = DateTime(timeClient.getEpochTime());
-      }
+      //Serial.println("data sampler task start");
+      now = DateTime(timeClient.getEpochTime());
       DatalogString = "";
       DatalogString += "time:" + now.timestamp() + ",";
       DatalogString += "temp:";
@@ -1049,6 +1050,7 @@ static void xDataSamplerTask(void* pvParameters) {
       Serial.println(DataStrings.DataStringArray[DataLogIndex].TheString);
       DataLogIndex++;
       if (DataLogIndex >= MAXDATASTRINGS) { DataLogIndex = 0; }
+      //Serial.println("data sampler task end");
       vTaskDelay(30000 / portTICK_PERIOD_MS);
   } 
 }
@@ -1068,7 +1070,8 @@ static void xDataloggerTask(void* pvParameters) {
   byte DL_pgm_state = DL_PGM_STATE_INIT;
   vTaskDelay(60000 / portTICK_PERIOD_MS);
   while (true) {
-    if (xSemaphoreTake(SPIBusSemaphore, 5)) {
+    //Serial.print("DatalogTask: ");Serial.println(DL_pgm_state);
+    if (xSemaphoreTake(SPIBusSemaphore, 1000)) {
       switch (DL_pgm_state) {
         case DL_PGM_STATE_INIT:
           {
@@ -1159,7 +1162,9 @@ static void xDataloggerTask(void* pvParameters) {
       xSemaphoreGive(SPIBusSemaphore);
     }       //  end try to get semaphore
     else {  // could not obtain semaphore
+      Serial.println("Datalogger task Could not get mutex");
     }
+    //Serial.println("Datalog task end");
     if (DL_PGM_STATE_IDLE) {
       vTaskDelay(10000 / portTICK_PERIOD_MS);
     } else {
@@ -1463,7 +1468,7 @@ void xMenu::xMenuEnter(){
 }
 
 void xMenu::AddMenuItemFunction(String _text,void (*ptr)(void)){
-  Serial.print("Menu Function: ");Serial.println(_text);
+  //Serial.print("Menu Function: ");Serial.println(_text);
   if((items<MAXMENUITEMS)){
     MenuItems[items].MenuFunctionType=Function;
     MenuItems[items].text=_text;
@@ -1474,7 +1479,7 @@ void xMenu::AddMenuItemFunction(String _text,void (*ptr)(void)){
 }
 
 void xMenu::AddMenuItemSubmenu(String _text, xMenu *_SubMenu){
-  Serial.print("Submenu: ");Serial.println(_text);
+  //Serial.print("Submenu: ");Serial.println(_text);
   if((items<MAXMENUITEMS)){
     MenuItems[items].MenuFunctionType=Menu;
     MenuItems[items].text=_text;
@@ -1565,18 +1570,18 @@ void Choice::init(){
 }
 
 void Choice::addChoice(String _text){
-  if(numChoices+1<CHOICEITEMS){
+  if(numChoices<CHOICEITEMS){
     choicelist[numChoices].text=_text;
     numChoices++;
   }
 }
-
 void Choice::nextChoice(){
   if(sel+1<numChoices){
     sel++;
   }
+  Serial.println(sel);
+  Serial.println(numChoices);
 }
-
 void Choice::prevChoice(){
   if(sel-1>=0){
     sel--;
@@ -1628,8 +1633,6 @@ void xDisplay::saveDisplay(){
 void xDisplay::setMenu(xMenu *_Menu){
   TheMenu = _Menu;
 }
-
-
 void xDisplay::init(){}
 
 void xDisplay::update(){}
@@ -1784,7 +1787,7 @@ void xSettingsDisplay::init(){
 }
 
 void xSettingsDisplay::update(){
-    TheMenu->display();
+    SettingsMenu.display();
 }
 
 /*
@@ -2003,6 +2006,7 @@ void xEditDavisStationActiveDisplay::update(){
 
 void xEditDavisStationActiveDisplay::saveDisplay(){
   stations[stationSel].active=_DavisStationActive.YN;
+  SetDefaultDisplay();
 }
 
 /*
@@ -2040,8 +2044,8 @@ void xEditWundergroundSensorsMenu::init(){
       WundergroundSensorsMenu.AddMenuItemFunction("Thermometer:",OpenEditWundergroundEditTemperatureSensorDisplay);
       WundergroundSensorsMenu.AddMenuItemFunction("Humidity:",OpenEditWundergroundEditHumiditySensorDisplay);
       WundergroundSensorsMenu.AddMenuItemFunction("Rain Gauge:",OpenEditWundergroundRainGaugeSettingsMenu);
-//      WundergroundSensorsMenu.AddMenuItemFunction("Anemometer Station: ",OpenEditWundergroundAnemometerDisplay);
-//      WundergroundSensorsMenu.AddMenuItemFunction("Wind Direction Station: ",OpenEditWundergroundWindDirectionSensorDisplay);
+      WundergroundSensorsMenu.AddMenuItemFunction("Anemometer: ",OpenEditWundergroundAnemometerDisplay);
+//      WundergroundSensorsMenu.AddMenuItemFunction("Wind Direction: ",OpenEditWundergroundWindDirectionSensorDisplay);
       //WundergroundSensorsMenu.AddMenuItemFunction("Barometric Pressure Station: ",);
     up.button_press_handler=xUpMenuPress;
     down.button_press_handler=xDownMenuPress;
@@ -2067,7 +2071,7 @@ void xEditWundergroundHumidityDisplay::init(){
   TheMenu=&WundergroundHumiditySensorMenu;
   WundergroundHumiditySensorMenu.init();
   WundergroundHumiditySensorMenu.AddMenuItemFunction("Active: ",OpenEditWundergroundEditHumidityActiveDisplay);
-//  WundergroundHumiditySensorMenu.AddMenuItemFunction("Station: ",OpenEditWundergroundEditHumidityStationChoiceDisplay);
+  WundergroundHumiditySensorMenu.AddMenuItemFunction("Station: ",OpenEditWundergroundEditHumidityStationChoiceDisplay);
 //  WundergroundHumiditySensorMenu.AddMenuItemFunction("Sensor: ",OpenEditWundergroundEditHumidityStationSensorChoiceDisplay);
   up.button_press_handler=xUpMenuPress;
   down.button_press_handler=xDownMenuPress;
@@ -2075,10 +2079,7 @@ void xEditWundergroundHumidityDisplay::init(){
 }
 
 void xEditWundergroundHumidityDisplay::update(){
-  oled.clearDisplay();
-  oled.setCursor(0, 0);
   WundergroundHumiditySensorMenu.display();
-  oled.display();
 }
 
 /*
@@ -2125,10 +2126,28 @@ class xEditWundergroundHumidityStationChoiceDisplay:public xDisplay{
     void saveDisplay();
 };
 
-    void xEditWundergroundHumidityStationChoiceDisplay::init(){}
-    void xEditWundergroundHumidityStationChoiceDisplay::update(){}
-    void xEditWundergroundHumidityStationChoiceDisplay::saveDisplay(){}
-
+void xEditWundergroundHumidityStationChoiceDisplay::init(){
+    TheChoice=&HumidityStation;
+    HumidityStation.addChoice("Davis 1");
+    HumidityStation.addChoice("Davis 2");
+    HumidityStation.addChoice("Davis 3");
+    HumidityStation.addChoice("Davis 4");
+    HumidityStation.addChoice("Davis 5");
+    HumidityStation.addChoice("Davis 6");
+    HumidityStation.addChoice("Davis 7");
+    HumidityStation.addChoice("Davis 8");
+    up.button_press_handler=xUpPressChoice;
+    down.button_press_handler=xDownPressChoice;
+    enter.button_press_handler=xEnterPressChoice;
+}
+void xEditWundergroundHumidityStationChoiceDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  HumidityStation.display();
+  oled.display();
+}
+void xEditWundergroundHumidityStationChoiceDisplay::saveDisplay(){
+  SetDefaultDisplay();}
 // Choose the Humidity sensor within the Station
 class xEditWundergroundHumidityStationSensorChoiceDisplay:public xDisplay{
     public:
@@ -2139,20 +2158,88 @@ class xEditWundergroundHumidityStationSensorChoiceDisplay:public xDisplay{
 
     void xEditWundergroundHumidityStationSensorChoiceDisplay::init(){}
     void xEditWundergroundHumidityStationSensorChoiceDisplay::update(){}
-    void xEditWundergroundHumidityStationSensorChoiceDisplay::saveDisplay(){}
-
+    void xEditWundergroundHumidityStationSensorChoiceDisplay::saveDisplay(){SetDefaultDisplay();}
 /*
   Edit Wunderground Anemometer 
 */
-
 class xEditWundergroundAnemometerDisplay:public xDisplay{
+  xMenu AnemometerSettingsMenu;
     public:
     void init();
     void update();
+    void saveDisplay();
 };
+void xEditWundergroundAnemometerDisplay::init(){
+  TheMenu=&AnemometerSettingsMenu;
+  AnemometerSettingsMenu.init();
+  AnemometerSettingsMenu.AddMenuItemFunction("Active: ",OpenEditWundergroundAnemometerStationActiveDisplay);
+  AnemometerSettingsMenu.AddMenuItemFunction("Station: ",OpenEditWundergroundAnemometerStationChoiceDisplay);
+  up.button_press_handler=xUpMenuPress;
+  down.button_press_handler=xDownMenuPress;
+  enter.button_press_handler=xEnterMenuPress;
+}
+void xEditWundergroundAnemometerDisplay::update(){
+  AnemometerSettingsMenu.display();
+}
+void xEditWundergroundAnemometerDisplay::saveDisplay(){
+  SetDefaultDisplay();}
 
-void xEditWundergroundAnemometerDisplay::init(){}
-void xEditWundergroundAnemometerDisplay::update(){}
+class xEditWundergroundAnemometerStationActiveDisplay:public xDisplay{
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+    YNField AnemometerActive;
+};
+void xEditWundergroundAnemometerStationActiveDisplay::init(){
+  TheYNField=&AnemometerActive;
+  AnemometerActive.YN=false;
+  //AnemometerActive.YN=QueueAnemometerForInterfaces;
+  up.button_press_handler=xUpPressYN;
+  down.button_press_handler=xDownPressYN;
+  enter.button_press_handler=xEnterPressYN;
+}
+void xEditWundergroundAnemometerStationActiveDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  AnemometerActive.display();
+  oled.display();
+}
+void xEditWundergroundAnemometerStationActiveDisplay::saveDisplay(){
+  SetDefaultDisplay();
+}
+
+class xEditWundergroundAnemometerStationChoiceDisplay:public xDisplay{
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+    Choice AnemometerStationChoice;
+};
+void xEditWundergroundAnemometerStationChoiceDisplay::init(){
+    TheChoice=&AnemometerStationChoice;
+    AnemometerStationChoice.addChoice("Davis 1");
+    AnemometerStationChoice.addChoice("Davis 2");
+    AnemometerStationChoice.addChoice("Davis 3");
+    AnemometerStationChoice.addChoice("Davis 4");
+    AnemometerStationChoice.addChoice("Davis 5");
+    AnemometerStationChoice.addChoice("Davis 6");
+    AnemometerStationChoice.addChoice("Davis 7");
+    AnemometerStationChoice.addChoice("Davis 8");
+    up.button_press_handler=xUpPressChoice;
+    down.button_press_handler=xDownPressChoice;
+    enter.button_press_handler=xEnterPressChoice;
+}
+
+void xEditWundergroundAnemometerStationChoiceDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  AnemometerStationChoice.display();
+  oled.display();
+}
+void xEditWundergroundAnemometerStationChoiceDisplay::saveDisplay()
+{
+  SetDefaultDisplay();}
 
 /*
   @class xEditWundergroundThermometerDisplay
@@ -2174,9 +2261,11 @@ void xEditWundergroundThermometerDisplayMenu::init(){
   down.button_press_handler=xDownMenuPress;
   enter.button_press_handler=xEnterMenuPress;
 }
-  void xEditWundergroundThermometerDisplayMenu::update(){
+
+void xEditWundergroundThermometerDisplayMenu::update(){
   WundergroundThermometerSettingsMenu.display();
 }
+
 class xEditWundergroundThermometerActiveDisplay:public xDisplay{
     public:
     void init();
@@ -2184,6 +2273,7 @@ class xEditWundergroundThermometerActiveDisplay:public xDisplay{
     void saveDisplay();
     YNField _WundergroundThermometerActive;
 };
+
 void xEditWundergroundThermometerActiveDisplay::init(){
   TheYNField=&_WundergroundThermometerActive;
   _WundergroundThermometerActive.YN=QueueThermometerForInterfaces;
@@ -2191,32 +2281,126 @@ void xEditWundergroundThermometerActiveDisplay::init(){
   down.button_press_handler=xDownPressYN;
   enter.button_press_handler=xEnterPressYN;
 }
+
 void xEditWundergroundThermometerActiveDisplay::update(){
   oled.clearDisplay();
   oled.setCursor(0, 0);
    _WundergroundThermometerActive.display();
   oled.display();
 }
+
 void xEditWundergroundThermometerActiveDisplay::saveDisplay(){
   QueueThermometerForInterfaces=_WundergroundThermometerActive.YN;
   saveThermometerToDisk();
   SetDefaultDisplay();
 }
 
+class xEditWundergroundThermometerStationChoice:public xDisplay{
+  Choice ThermometerStation;
+
+    public:
+    void init();
+    void update();
+    void saveDisplay();
+};
+
+void xEditWundergroundThermometerStationChoice::init(){
+  TheChoice=&ThermometerStation;
+  ThermometerStation.addChoice("Davis 1");
+  ThermometerStation.addChoice("Davis 2");
+  ThermometerStation.addChoice("Davis 3");
+  ThermometerStation.addChoice("Davis 4");
+  ThermometerStation.addChoice("Davis 5");
+  ThermometerStation.addChoice("Davis 6");
+  ThermometerStation.addChoice("Davis 7");
+  ThermometerStation.addChoice("Davis 8");
+  up.button_press_handler=xUpPressChoice;
+  down.button_press_handler=xDownPressChoice;
+  enter.button_press_handler=xEnterPressChoice;
+}
+
+void xEditWundergroundThermometerStationChoice::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  ThermometerStation.display();
+  oled.display();
+}
+
+void xEditWundergroundThermometerStationChoice::saveDisplay(){
+  SetDefaultDisplay();
+}
+
 /*
-  @class 
-  @brief
+  @class xEditWundergroundWindDirectionDisplay
+  @brief Menu to edit settings for for Wunderground interface Wind Direction sensor
 */
 class xEditWundergroundWindDirectionDisplay:public xDisplay{
+  xMenu WindDirectionSettingsMenu;
     public:
     void init();
     void update();
 };
 
-void xEditWundergroundWindDirectionDisplay::init(){}
-void xEditWundergroundWindDirectionDisplay::update(){
+void xEditWundergroundWindDirectionDisplay::init(){
+  TheMenu=&WindDirectionSettingsMenu;
+  WindDirectionSettingsMenu.init();
+  WindDirectionSettingsMenu.AddMenuItemFunction("Active: ",OpenEditWundergroundWindDirectionStationActiveDisplay);
+  WindDirectionSettingsMenu.AddMenuItemFunction("Station: ",OpenEditWundergroundWindDirectionStationChoiceDisplay);
+  up.button_press_handler=xUpMenuPress;
+  down.button_press_handler=xDownMenuPress;
+  enter.button_press_handler=xEnterMenuPress;
 }
 
+void xEditWundergroundWindDirectionDisplay::update(){
+  WindDirectionSettingsMenu.display();
+}
+
+class xEditWundergroundWindDirectionActiveDisplay:public xDisplay{
+    public:
+    void init();
+    void update();
+    YNField WindDirectionSensorActiveYN;
+};
+void xEditWundergroundWindDirectionActiveDisplay::init(){
+  TheYNField=&WindDirectionSensorActiveYN;
+  WindDirectionSensorActiveYN.YN=false;
+  //WindDirectionSensorActiveYN.YN=QueueWindDirectionForInterfaces;
+  up.button_press_handler=xUpPressYN;
+  down.button_press_handler=xDownPressYN;
+  enter.button_press_handler=xEnterPressYN;
+}
+void xEditWundergroundWindDirectionActiveDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  WindDirectionSensorActiveYN.display();
+  oled.display();
+}
+class xEditWundergroundWindDirectionStationChoiceDisplay:public xDisplay{
+    public:
+    void init();
+    void update();
+    Choice WindDirectionStationChoice;
+};
+void xEditWundergroundWindDirectionStationChoiceDisplay::init(){
+  TheChoice=&WindDirectionStationChoice;
+  WindDirectionStationChoice.addChoice("Davis 1");
+  WindDirectionStationChoice.addChoice("Davis 2");
+  WindDirectionStationChoice.addChoice("Davis 3");
+  WindDirectionStationChoice.addChoice("Davis 4");
+  WindDirectionStationChoice.addChoice("Davis 5");
+  WindDirectionStationChoice.addChoice("Davis 6");
+  WindDirectionStationChoice.addChoice("Davis 7");
+  WindDirectionStationChoice.addChoice("Davis 8");
+  up.button_press_handler=xUpPressChoice;
+  down.button_press_handler=xDownPressChoice;
+  enter.button_press_handler=xEnterPressChoice;
+}
+void xEditWundergroundWindDirectionStationChoiceDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  WindDirectionStationChoice.display();
+  oled.display();
+}
 /*
   @class xEditWundergroundRainGaugeSettingsMenu
   @brief Wunderground Interface Rain Gauge Settings Menu
@@ -2227,12 +2411,12 @@ class xEditWundergroundRainGaugeSettingsMenu:public xDisplay{
     void update();
     xMenu RainGaugeSettingsMenu;
 };
+
 void xEditWundergroundRainGaugeSettingsMenu::init(){
   TheMenu=&RainGaugeSettingsMenu;
   RainGaugeSettingsMenu.init();
   RainGaugeSettingsMenu.AddMenuItemFunction("Active: ",OpenEditWundergroundRainGaugeSettingsActiveDisplay);
-  //WundergroundThermometerSettingsMenu.AddMenuItemFunction("Station: ",OpenEditWundergroundRainGaugeSettingsStationChoiceDisplay);
-  //WundergroundThermometerSettingsMenu.AddMenuItemFunction("Sensor: ",OpenEditWundergroundRainGaugeSettingsSensorChoiceDisplay);
+  RainGaugeSettingsMenu.AddMenuItemFunction("Station: ",OpenEditWundergroundRainGaugeSettingsStationChoiceDisplay);
   up.button_press_handler=xUpMenuPress;
   down.button_press_handler=xDownMenuPress;
   enter.button_press_handler=xEnterMenuPress;
@@ -2270,31 +2454,36 @@ void xEditWundergroundRainGaugeSettingsActiveDisplay::saveDisplay(){
 }
 
 class xEditWundergroundRainGaugeSettingsStationChoiceDisplay:public xDisplay{
-    public:
-    void init();
-    void update();
-};
-
-void xEditWundergroundRainGaugeSettingsStationChoiceDisplay::init(){}
-void xEditWundergroundRainGaugeSettingsStationChoiceDisplay::update(){}
-
-class xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay:public xDisplay{
+  Choice RainGaugeStationChoice;
     public:
     void init();
     void update();
     void saveDisplay();
 };
-void xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay::init(){}
-void xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay::update(){}
-void xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay::saveDisplay(){
-    SetDefaultDisplay();
+
+void xEditWundergroundRainGaugeSettingsStationChoiceDisplay::init(){
+  TheChoice=&RainGaugeStationChoice;
+  RainGaugeStationChoice.addChoice("Davis 1");
+  RainGaugeStationChoice.addChoice("Davis 2");
+  RainGaugeStationChoice.addChoice("Davis 3");
+  RainGaugeStationChoice.addChoice("Davis 4");
+  RainGaugeStationChoice.addChoice("Davis 5");
+  RainGaugeStationChoice.addChoice("Davis 6");
+  RainGaugeStationChoice.addChoice("Davis 7");
+  RainGaugeStationChoice.addChoice("Davis 8");
+  up.button_press_handler=xUpPressChoice;
+  down.button_press_handler=xDownPressChoice;
+  enter.button_press_handler=xEnterPressChoice;
 }
 
-xEditWundergroundRainGaugeSettingsMenu _xEditWundergroundRainGaugeSettingsMenu;
-xEditWundergroundRainGaugeSettingsActiveDisplay _xEditWundergroundRainGaugeSettingsActiveDisplay;
-xEditWundergroundRainGaugeSettingsStationChoiceDisplay _xEditWundergroundRainGaugeSettingsStationChoiceDisplay;
-xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay _xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay;
+void xEditWundergroundRainGaugeSettingsStationChoiceDisplay::update(){
+  oled.clearDisplay();
+  oled.setCursor(0, 0);
+  RainGaugeStationChoice.display();
+  oled.display();
+}
 
+void xEditWundergroundRainGaugeSettingsStationChoiceDisplay::saveDisplay(){}
 /*
   @brief xDisplay definitions
 */
@@ -2319,30 +2508,42 @@ xWundergroundEditStationActiveDisplay _xWundergroundEditStationActiveDisplay;
 
 xEditWundergroundHumidityDisplay _xEditWundergroundHumidityDisplay; // Humidity Sensor Settings Menu for Wunderground Interface
 xEditWundergroundHumidityActiveDisplay _xEditWundergroundHumidityActiveDisplay; // Humidity Sensor Active Field for Wunderground Interface
+xEditWundergroundHumidityStationChoiceDisplay _xEditWundergroundHumidityStationChoiceDisplay;
 
 xEditWundergroundThermometerDisplayMenu _xEditWundergroundThermometerDisplayMenu;
 xEditWundergroundThermometerActiveDisplay _xEditWundergroundThermometerActiveDisplay;
+xEditWundergroundThermometerStationChoice _xEditWundergroundThermometerStationChoice;
+
+xEditWundergroundRainGaugeSettingsMenu _xEditWundergroundRainGaugeSettingsMenu;
+xEditWundergroundRainGaugeSettingsActiveDisplay _xEditWundergroundRainGaugeSettingsActiveDisplay;
+xEditWundergroundRainGaugeSettingsStationChoiceDisplay _xEditWundergroundRainGaugeSettingsStationChoiceDisplay;
 
 xEditWundergroundAnemometerDisplay _xEditWundergroundAnemometerDisplay;
-xEditWundergroundWindDirectionDisplay _xEditWundergroundWindDirectionDisplay;
+xEditWundergroundAnemometerStationActiveDisplay _xEditWundergroundAnemometerStationActiveDisplay;
+xEditWundergroundAnemometerStationChoiceDisplay _xEditWundergroundAnemometerStationChoiceDisplay;
 
+xEditWundergroundWindDirectionDisplay _xEditWundergroundWindDirectionDisplay;
+xEditWundergroundWindDirectionActiveDisplay _xEditWundergroundWindDirectionActiveDisplay;
+xEditWundergroundWindDirectionStationChoiceDisplay _xEditWundergroundWindDirectionStationChoiceDisplay;
 /*
   @brief task manages the display
 */
 static void xDisplayTask(void* pvParameters) {
   DisplayQueue = xQueueCreate(2,sizeof(xDisplayEvent));
   TheDisplay = &_DefaultDisplay;
-  //_DefaultDisplay.init();
+  // we don't have the I2C semaphore yet. 
+  // DO NOT TRY TO CALL FUNCTIONS THAT WILL WRITE TO I2C
   DisplayEvent.Payload.Display=&_DefaultDisplay;
   DisplayEvent.DisplayAction=DISPLAY_SET;
   xQueueSend(DisplayQueue,&DisplayEvent, 1000);
   while (true) {
-  //try to get time from RTC
+  //
+  //Serial.println("Display Task Start");
   if(xQueuePeek(DisplayQueue, &DisplayEvent, 10000)==pdTRUE){
     if (xSemaphoreTake(I2CBusSemaphore, 5)) {
       // now = rtc.now();
       if(xQueueReceive(DisplayQueue, &DisplayEvent, 1)==pdTRUE){
-        Serial.println("display event");
+        //Serial.println("display event");
         if(DisplayEvent.DisplayAction==DISPLAY_SET){
           TheDisplay=DisplayEvent.Payload.Display;
           TheDisplay->init();
@@ -2371,6 +2572,7 @@ static void xDisplayTask(void* pvParameters) {
         }
     }
   //taskYIELD();
+  //Serial.println("Display Task End");
   vTaskDelay( 250 / portTICK_PERIOD_MS );
   }
 }
@@ -2429,7 +2631,6 @@ void xEnterRelease(){
   #endif
 }
 /* End default button handlers */
-
 /*
   @brief Button handlers for the MENU type
 */
@@ -2445,7 +2646,6 @@ void xDownMenuPress(){
 void xEnterMenuPress(){
   TheDisplay->TheMenu->xMenuEnter();}
 /* End MENU Button Handlers*/
-
 /*
   @brief Button handlers for the TEXT field 
 */
@@ -2467,7 +2667,6 @@ void SaveTextField(){
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /* End TEXT field Button Handlers */
-
 /*
   @brief Open Default Display
 */
@@ -2475,7 +2674,6 @@ void SetDefaultDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Payload.Display=&_DefaultDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
-
 /*
   @brief Open Network Status Display
 */
@@ -2491,7 +2689,6 @@ void SetSettingsDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Payload.Display=&SettingsDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);}
-
 /*
   @brief Opens the Menu to choose which Interface to edit
 */
@@ -2551,8 +2748,9 @@ void xEnterPressYN(){
 void SaveYNField(){
 
 }
-/* End YN Field Button Handlers */
-
+/* 
+  End YN Field Button Handlers 
+*/
 void xWundergroundEditStationActiveDisplay::init(){
   TheDisplay->TheYNField=&_WundergroundStationActive;
   _WundergroundStationActive.setField(WundergroundInfceEnable);
@@ -2560,6 +2758,9 @@ void xWundergroundEditStationActiveDisplay::init(){
   down.button_press_handler=xDownPressYN;
   enter.button_press_handler=xEnterPressYN;
 }
+/*
+  @brief draws the screen to edit the Wunderground Infce Active:Y/N field
+*/
 void xWundergroundEditStationActiveDisplay::update(){
   oled.clearDisplay();
   oled.setCursor(0, 0);
@@ -2567,24 +2768,36 @@ void xWundergroundEditStationActiveDisplay::update(){
   _WundergroundStationActive.display();
   oled.display();
 }
+/*
+  @brief Save the screen that will enable/disable the Wunderground interface
+*/
 void xWundergroundEditStationActiveDisplay::saveDisplay(){
   WundergroundInfceEnable=TheDisplay->TheYNField->YN;
   SaveWundergroundCredentials();
   SetDefaultDisplay();
 }
-/* 
+/*
   @brief Button Handlers for CHOICE field
+*/
+/*
+  @brief Button Handler for Choice Field (Up Button)
 */
 void xUpPressChoice(){
   TheDisplay->TheChoice->prevChoice();
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
+/*
+  @brief Button Handler for Choice Field (Down Button)
+*/
 void xDownPressChoice(){
   TheDisplay->TheChoice->nextChoice();
   xMenuEvent.DisplayAction=DISPLAY_UPDATE;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
+/*
+  @brief Button Handler for Choice Field (Enter Button)
+*/
 void xEnterPressChoice(){
   TheDisplay->TheChoice->enterChoice();
   xMenuEvent.DisplayAction=DISPLAY_SAVE;
@@ -2636,16 +2849,37 @@ void OpenEditWundergroundSensorsMenu(){
   @brief Opens the menu for the Wunderground Interface Anemometer sensor
 */
 void OpenEditWundergroundAnemometerDisplay(){
-    xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Payload.Display=&_xEditWundergroundAnemometerDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
+void OpenEditWundergroundAnemometerStationActiveDisplay(){
+    xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Payload.Display=&_xEditWundergroundAnemometerStationActiveDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+void OpenEditWundergroundAnemometerStationChoiceDisplay(){
+    xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Payload.Display=&_xEditWundergroundAnemometerStationChoiceDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+
 /*
   @brief Opens the menu for the Wunderground Interface Wind Direction sensor
 */
 void OpenEditWundergroundWindDirectionSensorDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Payload.Display=&_xEditWundergroundWindDirectionDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+void OpenEditWundergroundWindDirectionStationActiveDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Payload.Display=&_xEditWundergroundWindDirectionActiveDisplay;
+  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
+}
+void OpenEditWundergroundWindDirectionStationChoiceDisplay(){
+  xMenuEvent.DisplayAction=DISPLAY_SET;
+  xMenuEvent.Payload.Display=&_xEditWundergroundWindDirectionStationChoiceDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
@@ -2672,25 +2906,33 @@ void OpenEditWundergroundEditPressureSensorDisplay(){
   xMenuEvent.Payload.Display=&_xEditDavisStationDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
-
+/*
+  @brief Open the Wunderground Interface Humidity Sensor Active:Y/N screen
+*/
 void OpenEditWundergroundEditHumidityActiveDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Payload.Display=&_xEditWundergroundHumidityActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
+/*
+  @brief Open the Wunderground Interface Humidity Station Choice
+*/
 void OpenEditWundergroundEditHumidityStationChoiceDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Payload.Display=&_xEditDavisStationDisplay;
+  xMenuEvent.Payload.Display=&_xEditWundergroundHumidityStationChoiceDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
-
+/*
+  @brief Open the Wunderground Interface Humidity Sensor Choice
+        (Some Davis stations can have up to 4 Temp/Humidity sensors)
+*/
 void OpenEditWundergroundEditHumidityStationSensorChoiceDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Payload.Display=&_xEditDavisStationDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
-  @brief Wunderground Interface settings display - thermometer active. 
+  @brief Wunderground Interface settings display - thermometer active Y/N. 
 */
 void OpenEditWundergroundThermometerActiveDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
@@ -2698,13 +2940,8 @@ void OpenEditWundergroundThermometerActiveDisplay(){
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
-  @brief Lets the user set which station to pull humidity from
+  @brief Lets the user choose which thermometer within the station to use. (Some Davis stations can have up to 4 Temp/Humidity sensors)
 */
-void OpenEditWundergroundThermometerStationChoiceDisplay(){
-  xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Payload.Display=&_xEditWundergroundHumidityActiveDisplay;
-  xQueueSend(DisplayQueue,&xMenuEvent, 1000);
-}
 void OpenEditWundergroundThermometerSensorChoiceDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Payload.Display=&_xEditWundergroundHumidityActiveDisplay;
@@ -2719,21 +2956,31 @@ void OpenEditWundergroundRainGaugeSettingsMenu(){
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
 /*
-  @brief Opens the Wunderground Rain Gauge Active YN display
+  @brief Opens the Wunderground Rain Gauge Active YN display. 
 */
 void OpenEditWundergroundRainGaugeSettingsActiveDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Payload.Display=&_xEditWundergroundRainGaugeSettingsActiveDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
+/*
+  @brief Screen Lets the user choose which Davis station to pull the Rain Gauge data from for the Wunderground interface
+*/
 void OpenEditWundergroundRainGaugeSettingsStationChoiceDisplay(){
     xMenuEvent.DisplayAction=DISPLAY_SET;
   xMenuEvent.Payload.Display=&_xEditWundergroundRainGaugeSettingsStationChoiceDisplay;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
-void OpenEditWundergroundRainGaugeSettingsSensorChoiceDisplay(){
+/*
+
+*/
+void SaveDavisStations(){
+
+}
+void OpenEditWundergroundThermometerStationChoiceDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
-  xMenuEvent.Payload.Display=&_xEditWundergroundRainGaugeSettingsStationSensorChoiceDisplay;
+  xMenuEvent.Payload.Display=&_xEditWundergroundThermometerStationChoice;
   xQueueSend(DisplayQueue,&xMenuEvent, 1000);
 }
+
 
