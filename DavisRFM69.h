@@ -140,6 +140,17 @@ typedef struct __attribute__((packed)) Station {
   byte progress;			// search(sync) progress in percent.
   byte channel;           	// rx channel the next packet of the station is expected on (moved by amm for packing on 32 bit machines)
   byte last_channel;
+
+  float temperature;
+  float tempf;
+  float tempc;
+  float humidity;
+  float uv;
+  float windgust;
+  float winddirection;
+
+  float rain,rainsecs;
+
 };
 
 class DavisRFM69 {

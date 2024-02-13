@@ -106,86 +106,86 @@ switch (PgmState) {
       // Send temperature and humidity if necessary
       #ifdef _INFCE_SEND_TEMP_HUMIDITY
       if(QueueThermometerForInterfaces){
-      if(!(temperature==NAN)){
+      if(!(stations[WundergroundThermometer1Station].temperature==NAN)&(stations[WundergroundThermometer1Station].active==true)){
         switch (thermometer1Type) {
           case WU_S_TEMPC_T: 
           {
-            Wundergroundpayload += F("&tempc=");Wundergroundpayload += String(tempc);
+            Wundergroundpayload += F("&tempc=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempc);
             break;
           }
           case WU_S_TEMPC2_T: 
           {
-            Wundergroundpayload += F("&tempc2=");Wundergroundpayload += String(tempc);
+            Wundergroundpayload += F("&tempc2=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempc);
             break;
           }
           case WU_S_TEMPC3_T: 
           {
-            Wundergroundpayload += F("&tempc3=");Wundergroundpayload += String(tempc);
+            Wundergroundpayload += F("&tempc3=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempc);
             break;
           }
           case WU_S_TEMPC4_T:
           {
-            Wundergroundpayload += F("&tempc4=") ;Wundergroundpayload += String(tempc);
+            Wundergroundpayload += F("&tempc4=") ;Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempc);
             break;
           }
           case WU_S_INDOORTEMPC_T:
           {
-            Wundergroundpayload += F("&indoortempc=");Wundergroundpayload += String(tempc);
+            Wundergroundpayload += F("&indoortempc=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempc);
             break;
           }
           case WU_S_SOILTEMPC_T:
           {
-            Wundergroundpayload += F("&soiltempc=");Wundergroundpayload += String(tempc);
+            Wundergroundpayload += F("&soiltempc=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempc);
             break;
           }
           case WU_S_SOILTEMPC2_T:
           {
-            Wundergroundpayload += F("&soiltempc2=");Wundergroundpayload += String(tempc);
+            Wundergroundpayload += F("&soiltempc2=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempc);
             break;
           }
           case WU_S_SOILTEMPC3_T:
           {
-            Wundergroundpayload += F("&soiltempc3=");Wundergroundpayload += String(tempc);
+            Wundergroundpayload += F("&soiltempc3=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempc);
             break;
           }
           case WU_S_TEMPF_T:
           {
-            Wundergroundpayload += F("&tempf=");Wundergroundpayload += String(tempf);
+            Wundergroundpayload += F("&tempf=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempf);
             break;
           }
           case WU_S_TEMPF2_T:
           {
-            Wundergroundpayload += F("&tempf2=");Wundergroundpayload += String(tempf);
+            Wundergroundpayload += F("&tempf2=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempf);
             break;
           }
           case WU_S_TEMPF3_T:
           {
-            Wundergroundpayload += F("&tempf3=");Wundergroundpayload += String(tempf);
+            Wundergroundpayload += F("&tempf3=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempf);
             break;
           }
           case WU_S_TEMPF4_T:
           {
-            Wundergroundpayload += F("&tempf4=");Wundergroundpayload += String(tempf);
+            Wundergroundpayload += F("&tempf4=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempf);
             break;
           }
           case WU_S_INDOORTEMPF_T:
           {
-            Wundergroundpayload += F("&indoortempf=");Wundergroundpayload += String(tempf);
+            Wundergroundpayload += F("&indoortempf=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempf);
             break;
           }
           case WU_S_SOILTEMPF_T:
           {
-            Wundergroundpayload += F("&soiltempf=");Wundergroundpayload += String(tempf);
+            Wundergroundpayload += F("&soiltempf=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempf);
             break;
           }
           case WU_S_SOILTEMPF2_T:
           {
-            Wundergroundpayload += F("&soiltempf2=");Wundergroundpayload += String(tempf);
+            Wundergroundpayload += F("&soiltempf2=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempf);
             break;
           }
           case WU_S_SOILTEMPF3_T:
           {
-            Wundergroundpayload += F("&soiltempf3=");Wundergroundpayload += String(tempf);
+            Wundergroundpayload += F("&soiltempf3=");Wundergroundpayload += String(stations[WundergroundThermometer1Station].tempf);
             break;
           }
 
@@ -194,14 +194,14 @@ switch (PgmState) {
         }
         // Add humidity to update string 
         if(QueueHumidityForInterfaces){
-          if(!(humidity==NAN)){ // sanity check 
+          if(!(stations[WundergroundHumidity1Station].humidity==NAN)&(stations[WundergroundHumidity1Station].active)){ // sanity check 
             switch (humidity1_sensor_type) { 
               case WU_S_HUMIDITY_T: {
-                Wundergroundpayload += "&humidity="+String(humidity,2);
+                Wundergroundpayload += "&humidity="+String(stations[WundergroundHumidity1Station].humidity,2);
                 break;
               }
               case WU_S_INDOORHUMIDITY_T: {
-                Wundergroundpayload += "&indoorhumidity="+String(humidity,2);
+                Wundergroundpayload += "&indoorhumidity="+String(stations[WundergroundHumidity1Station].humidity,2);
                 break;
               }
             }

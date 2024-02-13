@@ -68,6 +68,19 @@
 #define mem_WUNDERGROUNDID (uint32_t)0x0125
 #define mem_WUNDERGROUNDPASSWORD (uint32_t)0x0150
 
+#define mem_WUNDERGROUND_TEMP1_STATION (uint32_t)0x0175
+#define mem_WUNDERGROUND_TEMP2_STATION (uint32_t)0x0176
+#define mem_WUNDERGROUND_TEMP3_STATION (uint32_t)0x0177
+#define mem_WUNDERGROUND_TEMP4_STATION (uint32_t)0x0178
+#define mem_WUNDERGROUND_HUMIDITY1_STATION (uint32_t)0x0179
+#define mem_WUNDERGROUND_HUMIDITY2_STATION (uint32_t)0x0180
+#define mem_WUNDERGROUND_HUMIDITY3_STATION (uint32_t)0x0181
+#define mem_WUNDERGROUND_HUMIDITY4_STATION (uint32_t)0x0182
+
+#define mem_WUNDERGROUND_ANEMOMETER_STATION (uint32_t)0x0183
+#define mem_WUNDERGROUND_WINDDIRECTION_STATION (uint32_t)0x0184
+#define mem_WUNDERGROUND_RAINGAUGE_STATION (uint32_t)0x0185
+
 #define WundergroundStationIDLength 64
 #define WundergroundStationIDPassword 64
 
@@ -94,7 +107,22 @@ float tempf = NAN, tempc = NAN;
 bool QueueThermometerForInterfaces = true;
 bool QueueHumidityForInterfaces = true;
 bool QueueRainGaugeForInterfaces = false;
+bool QueueAnemometerForInterfaces = false;
+bool QueueWindDirectionForInterfaces = false;
 bool UseCelcius = false;
+
+int WundergroundThermometer1Station = 0;
+int WundergroundThermometer2Station = 0;
+int WundergroundThermometer3Station = 0;
+int WundergroundThermometer4Station = 0;
+int WundergroundHumidity1Station = 0;
+int WundergroundHumidity2Station = 0;
+int WundergroundHumidity3Station = 0;
+int WundergroundHumidity4Station = 0;
+
+int WundergroundAnemometerStation = 0;
+int WundergroundWindDirectionStation = 0;
+
 #endif
 
 #include <Ethernet.h>
@@ -228,6 +256,8 @@ char WundergroundStationPassword[WundergroundStationIDPassword] = "";
 uint8_t thermometer1Type = WU_S_TEMPF_T;
 uint8_t humidity1_sensor_type = WU_S_HUMIDITY_T;
 uint8_t WundergroundTimeSource = 1;
+
+
 
 static void xUpdateWundergroundInfce(void* pvParameters);  // Must be called in main loop
 
@@ -576,6 +606,7 @@ void decode_packet(RadioData* rd) {
         print_value("rain", -1, F(", "));
       } else {
         print_value("rain", packet[3], F(", "));
+        stations[stIx].rain=val;
       }
       break;
 
@@ -588,6 +619,7 @@ void decode_packet(RadioData* rd) {
       } else {
         if ((packet[4] & 0x40) == 0) val >>= 4;  // packet[4] bit 6: strong == 0, light == 1
         print_value("rainsecs", val, F(", "));
+        stations[stIx].rainsecs=val;
       }
       break;
 
@@ -602,8 +634,8 @@ void decode_packet(RadioData* rd) {
         print_value("temp", (float)(val / 10.0), F(", "));
 #ifdef _USE_TH_SENSOR
         temperature = (float)(val / 10.0);
-        tempf = temperature;
-        tempc = (temperature - 32) * 5 / 9;
+        stations[stIx].tempf = temperature;
+        stations[stIx].tempc = (temperature - 32) * 5 / 9;
 #endif
       }
       break;
@@ -612,7 +644,7 @@ void decode_packet(RadioData* rd) {
       val = ((packet[4] >> 4) << 8 | packet[3]) / 10;  // 0 -> no sensor
       print_value("rh", (float)val, F(", "));
 #ifdef _USE_TH_SENSOR
-      humidity = (float)val;
+      stations[stIx].humidity = (float)val;
 #endif
       break;
 
@@ -621,6 +653,7 @@ void decode_packet(RadioData* rd) {
       // gustref is the index of the last message 9 packet containing the gust (max wind speed).
       if (packet[3] != 0) {
         print_value("gustref", packet[5] & 0xf0 >> 4, F(", "));
+        stations[stIx].windgust=packet[5] & 0xf0 >> 4;
       }
       break;
 
@@ -2975,7 +3008,6 @@ void OpenEditWundergroundRainGaugeSettingsStationChoiceDisplay(){
 
 */
 void SaveDavisStations(){
-
 }
 void OpenEditWundergroundThermometerStationChoiceDisplay(){
   xMenuEvent.DisplayAction=DISPLAY_SET;
